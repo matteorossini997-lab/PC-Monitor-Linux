@@ -67,13 +67,21 @@ class HardwareMonitor:
             # Find hwmon for temperature
             hwmon_path = glob.glob(os.path.join(self.amd_gpu_path, 'device/hwmon/hwmon*'))
             if hwmon_path:
-                temp_path = os.path.join(hwmon_path[0], 'temp1_input')
-                if os.path.exists(temp_path):
-                    with open(temp_path, 'r') as f:
-                        temp = int(f.read().strip()) / 1000.0
+                for temp_file in ['temp1_input', 'temp2_input', 'temp3_input']:
+                    temp_path = os.path.join(hwmon_path[0], temp_file)
+                    if os.path.exists(temp_path):
+                        with open(temp_path, 'r') as f:
+                            temp = int(f.read().strip()) / 1000.0
+                        break
 
-            # VRAM is harder without amdgpu_top or parsing debugfs. 
-            # We'll just provide dummy 0 for now as standard sysfs doesn't expose it nicely without root.
+            # Try to get VRAM from standard amdgpu sysfs (available in recent kernels)
+            vram_used_path = os.path.join(self.amd_gpu_path, 'device/mem_info_vram_used')
+            vram_total_path = os.path.join(self.amd_gpu_path, 'device/mem_info_vram_total')
+            if os.path.exists(vram_used_path) and os.path.exists(vram_total_path):
+                with open(vram_used_path, 'r') as f:
+                    vram_used = int(f.read().strip()) / (1024**3)
+                with open(vram_total_path, 'r') as f:
+                    vram_total = int(f.read().strip()) / (1024**3)
         except Exception:
             pass
             
