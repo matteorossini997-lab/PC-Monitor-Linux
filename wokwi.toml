@@ -1,0 +1,4 @@
+[wokwi]
+version = 1
+firmware = "build/pc-monitor-poc.bin"
+elf = "build/pc-monitor-poc.elf"

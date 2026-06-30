@@ -17,10 +17,7 @@ idf_component_register(
         "ui/screensaver_mgr.c"
 
         # Screen implementations
-        "screens/screen_cpu_lvgl.c"
-        "screens/screen_gpu_lvgl.c"
-        "screens/screen_ram_lvgl.c"
-        "screens/screen_network_lvgl.c"
+        "screens/screen_unified_lvgl.c"
 
         # Compiled images (system icons - Desert-Spec v2.2)
         "images/CPU.c"

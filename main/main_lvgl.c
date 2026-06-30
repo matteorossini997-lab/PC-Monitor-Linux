@@ -98,29 +98,17 @@ static SemaphoreHandle_t s_stats_mutex = NULL;
 static SemaphoreHandle_t s_lvgl_mutex = NULL;
 
 /* Display Handles */
-static lvgl_gc9a01_handle_t display_cpu, display_gpu, display_ram, display_network;
+static lvgl_gc9a01_handle_t display_main;
 
 /* Screen Handles */
 static ui_screens_t s_screens = {0};
 static ui_screensavers_t s_screensavers = {0};
 static ui_status_dots_t s_dots = {0};
 
-/* SPI Pin Configurations */
-static const lvgl_gc9a01_config_t config_cpu = {
-    .pin_sck = 4, .pin_mosi = 5, .pin_cs = 12,
-    .pin_dc = 11, .pin_rst = 13, .spi_host = SPI2_HOST
-};
-static const lvgl_gc9a01_config_t config_gpu = {
-    .pin_sck = 4, .pin_mosi = 5, .pin_cs = 9,
-    .pin_dc = 46, .pin_rst = 10, .spi_host = SPI2_HOST
-};
-static const lvgl_gc9a01_config_t config_ram = {
-    .pin_sck = 4, .pin_mosi = 5, .pin_cs = 8,
-    .pin_dc = 18, .pin_rst = 3, .spi_host = SPI2_HOST
-};
-static const lvgl_gc9a01_config_t config_net = {
-    .pin_sck = 4, .pin_mosi = 5, .pin_cs = 16,
-    .pin_dc = 15, .pin_rst = 17, .spi_host = SPI2_HOST
+/* SPI Pin Configurations (Waveshare ESP32-S3-Touch-LCD-1.28) */
+static const lvgl_gc9a01_config_t config_main = {
+    .pin_sck = 10, .pin_mosi = 11, .pin_cs = 9,
+    .pin_dc = 8, .pin_rst = 12, .spi_host = SPI2_HOST
 };
 
 /* =============================================================================
@@ -314,8 +302,8 @@ void app_main(void)
 
     /* Initialize SPI Bus */
     spi_bus_config_t buscfg = {
-        .mosi_io_num = 5,
-        .sclk_io_num = 4,
+        .mosi_io_num = 11,
+        .sclk_io_num = 10,
         .miso_io_num = -1,
         .quadwp_io_num = -1,
         .quadhd_io_num = -1,
@@ -340,50 +328,15 @@ void app_main(void)
 
     hw_identity_t *hw_id = hw_identity_get();
 
-    /* Display 1: CPU */
-    ESP_LOGI(TAG, "Initializing CPU display...");
-    lvgl_gc9a01_init(&config_cpu, &display_cpu);
-    s_screens.cpu = screen_cpu_create(lvgl_gc9a01_get_display(&display_cpu));
-    if (s_screens.cpu && s_screens.cpu->screen) {
-        if (s_screens.cpu->label_title) {
-            lv_label_set_text(s_screens.cpu->label_title, hw_id->cpu_name);
-        }
-        s_dots.cpu = ui_manager_create_status_dot(s_screens.cpu->screen);
-        s_screensavers.cpu = ui_manager_create_screensaver_ex(
-            s_screens.cpu->screen, COLOR_SONIC_BG, ss_image_get_dsc(SS_IMG_CPU), SS_IMG_CPU);
-    }
-
-    /* Display 2: GPU */
-    ESP_LOGI(TAG, "Initializing GPU display...");
-    lvgl_gc9a01_init(&config_gpu, &display_gpu);
-    s_screens.gpu = screen_gpu_create(lvgl_gc9a01_get_display(&display_gpu));
-    if (s_screens.gpu && s_screens.gpu->screen) {
-        if (s_screens.gpu->label_title) {
-            lv_label_set_text(s_screens.gpu->label_title, hw_id->gpu_name);
-        }
-        s_dots.gpu = ui_manager_create_status_dot(s_screens.gpu->screen);
-        s_screensavers.gpu = ui_manager_create_screensaver_ex(
-            s_screens.gpu->screen, COLOR_ART_BG, ss_image_get_dsc(SS_IMG_GPU), SS_IMG_GPU);
-    }
-
-    /* Display 3: RAM */
-    ESP_LOGI(TAG, "Initializing RAM display...");
-    lvgl_gc9a01_init(&config_ram, &display_ram);
-    s_screens.ram = screen_ram_create(lvgl_gc9a01_get_display(&display_ram));
-    if (s_screens.ram && s_screens.ram->screen) {
-        s_dots.ram = ui_manager_create_status_dot(s_screens.ram->screen);
-        s_screensavers.ram = ui_manager_create_screensaver_ex(
-            s_screens.ram->screen, COLOR_DK_BG, ss_image_get_dsc(SS_IMG_RAM), SS_IMG_RAM);
-    }
-
-    /* Display 4: Network */
-    ESP_LOGI(TAG, "Initializing Network display...");
-    lvgl_gc9a01_init(&config_net, &display_network);
-    s_screens.network = screen_network_create(lvgl_gc9a01_get_display(&display_network));
-    if (s_screens.network && s_screens.network->screen) {
-        s_dots.net = ui_manager_create_status_dot(s_screens.network->screen);
-        s_screensavers.net = ui_manager_create_screensaver_ex(
-            s_screens.network->screen, COLOR_PACMAN_BG, ss_image_get_dsc(SS_IMG_NET), SS_IMG_NET);
+    /* Display 1: Main Unified Screen */
+    ESP_LOGI(TAG, "Initializing Main display...");
+    lvgl_gc9a01_init(&config_main, &display_main);
+    s_screens.main = screen_unified_create(lvgl_gc9a01_get_display(&display_main));
+    
+    if (s_screens.main && s_screens.main->screen) {
+        s_dots.main = ui_manager_create_status_dot(s_screens.main->screen);
+        s_screensavers.main = ui_manager_create_screensaver_ex(
+            s_screens.main->screen, COLOR_SONIC_BG, ss_image_get_dsc(SS_IMG_CPU), 0);
     }
 
     /* Register UI handles with manager */

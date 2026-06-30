@@ -12,36 +12,24 @@
 #include "lvgl.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "core/system_types.h"
+#include "../core/system_types.h"
 
 /* Forward declarations for screen types */
-typedef struct screen_cpu_t screen_cpu_t;
-typedef struct screen_gpu_t screen_gpu_t;
-typedef struct screen_ram_t screen_ram_t;
-typedef struct screen_network_t screen_network_t;
+typedef struct screen_unified_t screen_unified_t;
 
 /* Screen handles structure */
 typedef struct {
-    screen_cpu_t *cpu;
-    screen_gpu_t *gpu;
-    screen_ram_t *ram;
-    screen_network_t *network;
+    screen_unified_t *main;
 } ui_screens_t;
 
 /* Screensaver handles structure */
 typedef struct {
-    lv_obj_t *cpu;
-    lv_obj_t *gpu;
-    lv_obj_t *ram;
-    lv_obj_t *net;
+    lv_obj_t *main;
 } ui_screensavers_t;
 
 /* Status dot handles structure */
 typedef struct {
-    lv_obj_t *cpu;
-    lv_obj_t *gpu;
-    lv_obj_t *ram;
-    lv_obj_t *net;
+    lv_obj_t *main;
 } ui_status_dots_t;
 
 /* =============================================================================
