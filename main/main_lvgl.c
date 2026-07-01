@@ -65,7 +65,7 @@ static const char *TAG = "MAIN";
  * - Never use portMAX_DELAY (can cause freezes)
  * - Use timeouts with fail-safe skip behavior
  * ========================================================================== */
-#define LVGL_MUTEX_TIMEOUT_MS    200     /* Max wait for LVGL mutex */
+#define LVGL_MUTEX_TIMEOUT_MS    1000    /* Max wait for LVGL mutex (SW rendering arcs is slow!) */
 #define STATS_MUTEX_TIMEOUT_MS   100     /* Max wait for stats mutex */
 
 /* =============================================================================
@@ -337,6 +337,9 @@ void app_main(void)
         s_dots.main = ui_manager_create_status_dot(s_screens.main->screen);
         s_screensavers.main = ui_manager_create_screensaver_ex(
             s_screens.main->screen, COLOR_SONIC_BG, ss_image_get_dsc(SS_IMG_CPU), 0);
+        
+        /* ACTUALLY LOAD THE SCREEN! */
+        lv_screen_load(s_screens.main->screen);
     }
 
     /* Register UI handles with manager */

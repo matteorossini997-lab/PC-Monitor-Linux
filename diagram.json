@@ -14,7 +14,7 @@
       }
     },
     {
-      "type": "chip-gc9a01",
+      "type": "board-st7789",
       "id": "lcd",
       "top": -45,
       "left": 180,
@@ -28,7 +28,7 @@
     [ "esp:11", "lcd:SDA", "green", [ "v0" ] ],
     [ "esp:9", "lcd:CS", "orange", [ "v0" ] ],
     [ "esp:8", "lcd:DC", "yellow", [ "v0" ] ],
-    [ "esp:12", "lcd:RST", "purple", [ "v0" ] ],
+    [ "esp:12", "lcd:RES", "purple", [ "v0" ] ],
     [ "esp:3V3", "lcd:VCC", "red", [ "v0" ] ],
     [ "esp:GND", "lcd:GND", "black", [ "v0" ] ]
   ],
