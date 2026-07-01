@@ -8,6 +8,7 @@
 #include "../gui_settings.h"
 #include "../storage/hw_identity.h"
 #include "../screens/screens_lvgl.h"
+#include "../screens/screen_split_ring.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -132,6 +133,7 @@ void ui_manager_update_screens(const pc_stats_t *stats)
     if (!s_screens || !stats) return;
 
     if (s_screens->main) screen_unified_update(s_screens->main, stats);
+    if (s_screens->split_ring) screen_split_ring_update(s_screens->split_ring, stats);
 }
 
 /* =============================================================================
@@ -173,6 +175,7 @@ void ui_manager_set_screensaver_active(bool active)
 /* =============================================================================
  * COLOR COMMAND HANDLER
  * ========================================================================== */
+/*
 static uint32_t parse_hex_color(const char *hex_str)
 {
     if (hex_str[0] == '0' && (hex_str[1] == 'x' || hex_str[1] == 'X')) {
@@ -180,6 +183,7 @@ static uint32_t parse_hex_color(const char *hex_str)
     }
     return (uint32_t)strtoul(hex_str, NULL, 16);
 }
+*/
 
 bool ui_manager_handle_color_command(const char *line)
 {

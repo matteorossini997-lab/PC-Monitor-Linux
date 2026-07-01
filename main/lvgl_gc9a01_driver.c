@@ -120,7 +120,7 @@ esp_err_t lvgl_gc9a01_init(const lvgl_gc9a01_config_t *config, lvgl_gc9a01_handl
         .bits_per_pixel = 16,
     };
 
-    ret = esp_lcd_new_panel_st7789(io_handle, &panel_config, &handle->panel_handle);
+    ret = esp_lcd_new_panel_gc9a01(io_handle, &panel_config, &handle->panel_handle);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to create GC9A01 panel: %s", esp_err_to_name(ret));
         return ret;
@@ -129,7 +129,7 @@ esp_err_t lvgl_gc9a01_init(const lvgl_gc9a01_config_t *config, lvgl_gc9a01_handl
     // Initialize display hardware
     esp_lcd_panel_reset(handle->panel_handle);
     esp_lcd_panel_init(handle->panel_handle);
-    esp_lcd_panel_invert_color(handle->panel_handle, true); // ST7789 needs this!
+    esp_lcd_panel_invert_color(handle->panel_handle, true); // Some Waveshare GC9A01 need this
     esp_lcd_panel_mirror(handle->panel_handle, true, false);  // No mirror
     esp_lcd_panel_disp_on_off(handle->panel_handle, true);
 

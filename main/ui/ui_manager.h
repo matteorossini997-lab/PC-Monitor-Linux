@@ -16,10 +16,12 @@
 
 /* Forward declarations for screen types */
 typedef struct screen_unified_t screen_unified_t;
+typedef struct screen_split_ring_t screen_split_ring_t;
 
 /* Screen handles structure */
 typedef struct {
     screen_unified_t *main;
+    screen_split_ring_t *split_ring;
 } ui_screens_t;
 
 /* Screensaver handles structure */

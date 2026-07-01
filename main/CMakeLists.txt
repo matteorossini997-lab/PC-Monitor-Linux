@@ -18,6 +18,7 @@ idf_component_register(
 
         # Screen implementations
         "screens/screen_unified_lvgl.c"
+        "screens/screen_split_ring.c"
 
         # Compiled images (system icons - Desert-Spec v2.2)
         "images/CPU.c"

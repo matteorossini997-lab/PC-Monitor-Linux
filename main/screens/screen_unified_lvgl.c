@@ -55,7 +55,7 @@ screen_unified_t *screen_unified_create(lv_display_t *disp)
     lv_obj_set_style_pad_all(text_container, 0, 0);
 
     // Create labels for numerical values
-    lv_style_t style_text;
+    static lv_style_t style_text;
     lv_style_init(&style_text);
     lv_style_set_text_color(&style_text, lv_color_white());
     lv_style_set_text_font(&style_text, &lv_font_montserrat_14);

@@ -47,6 +47,8 @@
 #include "storage/hw_identity.h"
 #include "gui_settings.h"
 #include "drivers/usb_serial_comm.h"
+#include "screens/screens_lvgl.h"
+#include "screens/screen_split_ring.h"
 #include "ui/ui_manager.h"
 #include "ui/screensaver_mgr.h"
 #include "screens/screens_lvgl.h"
@@ -207,6 +209,7 @@ static void display_update_task(void *arg)
     }
 }
 
+
 /* =============================================================================
  * TASK: LVGL Tick (10ms)
  * ========================================================================== */
@@ -297,6 +300,12 @@ void app_main(void)
     /* Set theme callback for gui_settings (SET_SS_BG command) */
     gui_settings_set_theme_callback(theme_update_callback);
 
+    /* Initialize Backlight on GPIO 40 */
+    ESP_LOGI(TAG, "Turning on Backlight (GPIO 40)...");
+    gpio_reset_pin(40);
+    gpio_set_direction(40, GPIO_MODE_OUTPUT);
+    gpio_set_level(40, 1);
+
     /* Initialize UI manager */
     ui_manager_init(s_lvgl_mutex);
 
@@ -327,19 +336,28 @@ void app_main(void)
     ss_images_init();
 
     hw_identity_t *hw_id = hw_identity_get();
+    (void)hw_id; // suppress unused warning
 
-    /* Display 1: Main Unified Screen */
+    /* Display 1: Main Unified Screen & Split Ring Screen */
     ESP_LOGI(TAG, "Initializing Main display...");
     lvgl_gc9a01_init(&config_main, &display_main);
-    s_screens.main = screen_unified_create(lvgl_gc9a01_get_display(&display_main));
+    lv_display_t *disp = lvgl_gc9a01_get_display(&display_main);
+    
+    s_screens.main = screen_unified_create(disp);
+    s_screens.split_ring = screen_split_ring_create(disp);
     
     if (s_screens.main && s_screens.main->screen) {
         s_dots.main = ui_manager_create_status_dot(s_screens.main->screen);
         s_screensavers.main = ui_manager_create_screensaver_ex(
             s_screens.main->screen, COLOR_SONIC_BG, ss_image_get_dsc(SS_IMG_CPU), 0);
         
+        /* Setup status dots and screensaver for the second screen too */
+        if (s_screens.split_ring && s_screens.split_ring->screen) {
+            // No duplicate SS for now.
+        }
+
         /* ACTUALLY LOAD THE SCREEN! */
-        lv_screen_load(s_screens.main->screen);
+        lv_screen_load(s_screens.split_ring->screen); // Load new screen only
     }
 
     /* Register UI handles with manager */

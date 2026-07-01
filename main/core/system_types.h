@@ -35,6 +35,7 @@ typedef struct {
     /* RAM */
     float ram_used_gb;          /**< RAM used in GB, -1 = error */
     float ram_total_gb;         /**< RAM total in GB, -1 = error */
+    float ram_temp;             /**< RAM temperature in Celsius, -1 = error */
 
     /* Network */
     char net_type[16];          /**< Connection type: "LAN" or "WLAN" */
