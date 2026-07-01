@@ -8,10 +8,13 @@
       "id": "esp",
       "top": 0,
       "left": 0,
-      "attrs": {}
+      "attrs": {
+        "flashSize": "16",
+        "psramSize": "8"
+      }
     },
     {
-      "type": "chip-gc9a01",
+      "type": "board-st7789",
       "id": "lcd",
       "top": -45,
       "left": 180,

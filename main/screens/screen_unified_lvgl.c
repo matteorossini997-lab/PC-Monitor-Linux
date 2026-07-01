@@ -84,7 +84,7 @@ screen_unified_t *screen_unified_create(lv_display_t *disp)
     scr->label_cpu_temp = lv_label_create(text_container);
     lv_obj_add_style(scr->label_cpu_temp, &style_text, 0);
     lv_label_set_text(scr->label_cpu_temp, "C:-- G:--");
-    lv_obj_set_style_text_font(scr->label_cpu_temp, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_font(scr->label_cpu_temp, &lv_font_montserrat_14, 0);
     lv_obj_set_style_text_color(scr->label_cpu_temp, lv_color_hex(0xAAAAAA), 0);
 
     return scr;

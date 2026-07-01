@@ -37,6 +37,7 @@ idf_component_register(
         lvgl
         esp_lcd
         driver
+        esp_driver_usb_serial_jtag
 )
 
 littlefs_create_partition_image(storage lfs FLASH_IN_PROJECT)

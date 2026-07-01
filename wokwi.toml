@@ -2,3 +2,7 @@
 version = 1
 firmware = "build/pc-monitor-poc.bin"
 elf = "build/pc-monitor-poc.elf"
+
+[[chip]]
+name = "gc9a01"
+binary = "gc9a01.wasm"
