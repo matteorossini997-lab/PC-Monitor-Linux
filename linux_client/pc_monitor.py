@@ -5,6 +5,18 @@ import psutil
 import serial
 import os
 
+# ==============================================================================
+# ESP32 UI CONFIGURATION
+# ==============================================================================
+# Change these values to configure the UI on the ESP32!
+# Values will be automatically sent when the script starts.
+# Colors must be 6-character HEX strings (without '#')
+CFG_ACTIVE_SCREEN = 1      # 0 = Unified, 1 = Split Ring
+CFG_BG_COLOR      = "FFFFFF" # White background
+CFG_COLOR_CPU     = "0071C5" # Intel Blue
+CFG_COLOR_GPU     = "76B900" # NVIDIA Green
+CFG_COLOR_RAM     = "888888" # Gray
+# ==============================================================================
 try:
     import pynvml
     NVML_AVAILABLE = True
@@ -178,6 +190,12 @@ def main():
     print(f"Connected to {port}")
     
     with serial.Serial(port, 115200) as ser:
+        # Send UI configuration
+        cfg_str = f"CFG:SCR={CFG_ACTIVE_SCREEN},BG={CFG_BG_COLOR},CCPU={CFG_COLOR_CPU},CGPU={CFG_COLOR_GPU},CRAM={CFG_COLOR_RAM}\n"
+        print(f"Sending UI Config: {cfg_str.strip()}")
+        ser.write(cfg_str.encode('ascii'))
+        time.sleep(0.5)
+        
         while True:
             try:
                 stats = monitor.get_stats()

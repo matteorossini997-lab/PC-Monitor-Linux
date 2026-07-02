@@ -181,3 +181,44 @@ lv_display_t *lvgl_gc9a01_get_display(lvgl_gc9a01_handle_t *handle)
 {
     return handle ? handle->lv_disp : NULL;
 }
+
+/**
+ * @brief Set display hardware rotation
+ */
+void lvgl_gc9a01_set_rotation(lvgl_gc9a01_handle_t *handle, int rotation_deg)
+{
+    if (!handle || !handle->panel_handle) return;
+    
+    bool swap_xy = false;
+    bool mirror_x = false;
+    bool mirror_y = false;
+
+    // The base 0 degree orientation for Wokwi ST7789 uses mirror_x=true.
+    switch (rotation_deg) {
+        case 0:
+            swap_xy = false;
+            mirror_x = true;
+            mirror_y = false;
+            break;
+        case 90:
+            swap_xy = true;
+            mirror_x = false;
+            mirror_y = false;
+            break;
+        case 180:
+            swap_xy = false;
+            mirror_x = false;
+            mirror_y = true;
+            break;
+        case 270:
+            swap_xy = true;
+            mirror_x = true;
+            mirror_y = true;
+            break;
+        default:
+            return;
+    }
+
+    esp_lcd_panel_swap_xy(handle->panel_handle, swap_xy);
+    esp_lcd_panel_mirror(handle->panel_handle, mirror_x, mirror_y);
+}

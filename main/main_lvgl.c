@@ -70,6 +70,9 @@ static const char *TAG = "MAIN";
 #define LVGL_MUTEX_TIMEOUT_MS    1000    /* Max wait for LVGL mutex (SW rendering arcs is slow!) */
 #define STATS_MUTEX_TIMEOUT_MS   100     /* Max wait for stats mutex */
 
+/* Hardware Rotation (0, 90, 180, 270) */
+#define DISPLAY_ROTATION_DEG     0
+
 /* =============================================================================
  * TASK STACK SIZES (increased 30% for safety margin)
  * - String operations and printf consume significant stack
@@ -341,6 +344,8 @@ void app_main(void)
     /* Display 1: Main Unified Screen & Split Ring Screen */
     ESP_LOGI(TAG, "Initializing Main display...");
     lvgl_gc9a01_init(&config_main, &display_main);
+    lvgl_gc9a01_set_rotation(&display_main, DISPLAY_ROTATION_DEG);
+    
     lv_display_t *disp = lvgl_gc9a01_get_display(&display_main);
     
     s_screens.main = screen_unified_create(disp);
@@ -355,15 +360,15 @@ void app_main(void)
         if (s_screens.split_ring && s_screens.split_ring->screen) {
             // No duplicate SS for now.
         }
-
-        /* ACTUALLY LOAD THE SCREEN! */
-        lv_screen_load(s_screens.split_ring->screen); // Load new screen only
     }
 
     /* Register UI handles with manager */
     ui_manager_set_screens(&s_screens);
     ui_manager_set_screensavers(&s_screensavers);
     ui_manager_set_status_dots(&s_dots);
+
+    /* Apply loaded theme and active screen */
+    ui_manager_apply_theme();
 
     /* Register callback for screensaver image hot-swap (Thread-Safety Fix) */
     ss_set_reload_callback((ss_image_reload_cb_t)ui_manager_on_image_reload);

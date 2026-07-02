@@ -30,6 +30,9 @@ typedef struct {
 
     /* Version for future migrations */
     uint16_t version;
+    
+    /* Active Screen (0 = Unified, 1 = Split Ring) */
+    uint8_t active_screen;
 
     /* ========================================================================
      * SCREEN BACKGROUNDS (Normal Mode)

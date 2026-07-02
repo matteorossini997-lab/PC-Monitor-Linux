@@ -3,13 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "../gui_settings.h"
+
 #define ARC_WIDTH 16
 #define ARC_RADIUS 105
 
-// Base colors
-#define COLOR_CPU lv_palette_main(LV_PALETTE_YELLOW)
-#define COLOR_GPU lv_palette_main(LV_PALETTE_GREEN)
-#define COLOR_RAM lv_palette_main(LV_PALETTE_BLUE)
 #define COLOR_ALERT lv_palette_main(LV_PALETTE_RED)
 
 static lv_obj_t *create_segment_arc(lv_obj_t *parent, int rotation, int span_angle, lv_color_t color)
@@ -50,16 +48,22 @@ screen_split_ring_t *screen_split_ring_create(lv_display_t *disp)
     if (!scr) return NULL;
 
     memset(scr, 0, sizeof(screen_split_ring_t));
+    scr->color_bg = lv_color_black();
+    scr->color_text = lv_color_white();
+    scr->color_cpu = lv_palette_main(LV_PALETTE_YELLOW);
+    scr->color_gpu = lv_palette_main(LV_PALETTE_GREEN);
+    scr->color_ram = lv_palette_main(LV_PALETTE_BLUE);
+
     scr->screen = lv_obj_create(NULL);
-    lv_obj_set_style_bg_color(scr->screen, lv_color_black(), 0);
+    lv_obj_set_style_bg_color(scr->screen, scr->color_bg, 0);
 
     // Create 3 segments (span of 120 degrees for a perfect circle)
     // CPU starts at 210
-    scr->arc_cpu = create_segment_arc(scr->screen, 210, 120, COLOR_CPU);
+    scr->arc_cpu = create_segment_arc(scr->screen, 210, 120, scr->color_cpu);
     // GPU starts at 330
-    scr->arc_gpu = create_segment_arc(scr->screen, 330, 120, COLOR_GPU);
+    scr->arc_gpu = create_segment_arc(scr->screen, 330, 120, scr->color_gpu);
     // RAM starts at 90
-    scr->arc_ram = create_segment_arc(scr->screen, 90, 120, COLOR_RAM);
+    scr->arc_ram = create_segment_arc(scr->screen, 90, 120, scr->color_ram);
 
     // Create a central container for text
     lv_obj_t *text_container = lv_obj_create(scr->screen);
@@ -75,28 +79,28 @@ screen_split_ring_t *screen_split_ring_create(lv_display_t *disp)
     // Font style
     static lv_style_t style_text;
     lv_style_init(&style_text);
-    lv_style_set_text_color(&style_text, lv_color_white());
+    lv_style_set_text_color(&style_text, scr->color_text);
     lv_style_set_text_font(&style_text, &lv_font_montserrat_14); // Use default font
 
     // CPU Label
     scr->label_cpu = lv_label_create(text_container);
     lv_obj_add_style(scr->label_cpu, &style_text, 0);
     lv_label_set_text(scr->label_cpu, "CPU: --%  --C");
-    lv_obj_set_style_text_color(scr->label_cpu, COLOR_CPU, 0);
+    lv_obj_set_style_text_color(scr->label_cpu, scr->color_cpu, 0);
     lv_obj_set_style_pad_bottom(scr->label_cpu, 10, 0);
 
     // GPU Label
     scr->label_gpu = lv_label_create(text_container);
     lv_obj_add_style(scr->label_gpu, &style_text, 0);
     lv_label_set_text(scr->label_gpu, "GPU: --%  --C");
-    lv_obj_set_style_text_color(scr->label_gpu, COLOR_GPU, 0);
+    lv_obj_set_style_text_color(scr->label_gpu, scr->color_gpu, 0);
     lv_obj_set_style_pad_bottom(scr->label_gpu, 10, 0);
 
     // RAM Label
     scr->label_ram = lv_label_create(text_container);
     lv_obj_add_style(scr->label_ram, &style_text, 0);
     lv_label_set_text(scr->label_ram, "RAM: --%  --C");
-    lv_obj_set_style_text_color(scr->label_ram, COLOR_RAM, 0);
+    lv_obj_set_style_text_color(scr->label_ram, scr->color_ram, 0);
 
     return scr;
 }
@@ -151,13 +155,53 @@ void screen_split_ring_update(screen_split_ring_t *scr, const pc_stats_t *stats)
 
     // Update CPU (span 120)
     update_segment(scr->arc_cpu, scr->label_cpu, "CPU", 
-                   stats->cpu_percent, stats->cpu_temp, COLOR_CPU, 120);
+                   stats->cpu_percent, stats->cpu_temp, scr->color_cpu, 120);
 
     // Update GPU (span 120)
     update_segment(scr->arc_gpu, scr->label_gpu, "GPU", 
-                   stats->gpu_percent, stats->gpu_temp, COLOR_GPU, 120);
+                   stats->gpu_percent, stats->gpu_temp, scr->color_gpu, 120);
 
     // Update RAM (span 120)
     update_segment(scr->arc_ram, scr->label_ram, "RAM", 
-                   ram_pct, stats->ram_temp, COLOR_RAM, 120);
+                   ram_pct, stats->ram_temp, scr->color_ram, 120);
+}
+
+void screen_split_ring_apply_colors(screen_split_ring_t *scr, const void *gui_settings_ptr)
+{
+    if (!scr || !gui_settings_ptr) return;
+    const gui_settings_t *cfg = (const gui_settings_t *)gui_settings_ptr;
+
+    scr->color_bg = lv_color_hex(cfg->bg_color[0]);
+    scr->color_text = lv_color_hex(cfg->text_value);
+    scr->color_cpu = lv_color_hex(cfg->arc_color_cpu);
+    scr->color_gpu = lv_color_hex(cfg->arc_color_gpu);
+    scr->color_ram = lv_color_hex(cfg->bar_color_ram);
+
+    // In LVGL 9, if bg is bright (e.g. > 128 luminance), text should be dark.
+    // For simplicity, we just use color_text from gui_settings, but we can also hardcode it or compute luminance.
+    // Since we are setting bg white, we must set text to black. Let's make text color inverse of bg or use a config.
+    // For now, let's determine text color automatically based on background brightness
+    if (lv_color_brightness(scr->color_bg) > 128) {
+        scr->color_text = lv_color_black();
+    } else {
+        scr->color_text = lv_color_white();
+    }
+
+    lv_obj_set_style_bg_color(scr->screen, scr->color_bg, 0);
+
+    // We don't need to update arc styles right here because `screen_split_ring_update` applies `scr->color_xxx` to styles dynamically every time data arrives!
+    // But we might want to trigger a redraw if data is not arriving:
+    lv_obj_set_style_text_color(scr->label_cpu, scr->color_cpu, 0);
+    lv_obj_set_style_text_color(scr->label_gpu, scr->color_gpu, 0);
+    lv_obj_set_style_text_color(scr->label_ram, scr->color_ram, 0);
+    
+    // Also update arc indicator base colors
+    lv_obj_set_style_arc_color(scr->arc_cpu, lv_color_darken(scr->color_cpu, 180), LV_PART_MAIN);
+    lv_obj_set_style_arc_color(scr->arc_cpu, scr->color_cpu, LV_PART_INDICATOR);
+    
+    lv_obj_set_style_arc_color(scr->arc_gpu, lv_color_darken(scr->color_gpu, 180), LV_PART_MAIN);
+    lv_obj_set_style_arc_color(scr->arc_gpu, scr->color_gpu, LV_PART_INDICATOR);
+    
+    lv_obj_set_style_arc_color(scr->arc_ram, lv_color_darken(scr->color_ram, 180), LV_PART_MAIN);
+    lv_obj_set_style_arc_color(scr->arc_ram, scr->color_ram, LV_PART_INDICATOR);
 }

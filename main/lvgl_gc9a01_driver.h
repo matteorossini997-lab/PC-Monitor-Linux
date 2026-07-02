@@ -59,6 +59,14 @@ esp_err_t lvgl_gc9a01_init(const lvgl_gc9a01_config_t *config, lvgl_gc9a01_handl
  */
 lv_display_t *lvgl_gc9a01_get_display(lvgl_gc9a01_handle_t *handle);
 
+/**
+ * @brief Set display hardware rotation
+ *
+ * @param handle Display handle
+ * @param rotation_deg Rotation in degrees (0, 90, 180, 270)
+ */
+void lvgl_gc9a01_set_rotation(lvgl_gc9a01_handle_t *handle, int rotation_deg);
+
 #ifdef __cplusplus
 }
 #endif

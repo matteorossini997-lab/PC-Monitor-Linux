@@ -29,6 +29,7 @@ void gui_settings_init_defaults(gui_settings_t *settings)
 
     settings->magic = GUI_SETTINGS_MAGIC;
     settings->version = GUI_SETTINGS_VERSION;
+    settings->active_screen = 1; // 1 = Split Ring
 
     /* Screen backgrounds (all black) */
     for (int i = 0; i < SCREEN_COUNT; i++) {
@@ -201,6 +202,42 @@ bool gui_settings_handle_command(const char *line)
         } else {
             ESP_LOGW(TAG, "SET_SS_BG: Parse error for '%s'", line + 10);
         }
+    } else if (strncmp(line, "CFG:", 4) == 0) {
+        char buffer[256];
+        strncpy(buffer, line + 4, sizeof(buffer) - 1);
+        buffer[sizeof(buffer) - 1] = '\0';
+        
+        bool changed = false;
+        char *token = strtok(buffer, ",");
+        while (token != NULL) {
+            if (strncmp(token, "SCR=", 4) == 0) {
+                gui_settings.active_screen = atoi(token + 4);
+                changed = true;
+            } else if (strncmp(token, "BG=", 3) == 0) {
+                gui_settings.bg_color[0] = strtol(token + 3, NULL, 16);
+                gui_settings.bg_color[1] = gui_settings.bg_color[0];
+                changed = true;
+            } else if (strncmp(token, "CCPU=", 5) == 0) {
+                gui_settings.arc_color_cpu = strtol(token + 5, NULL, 16);
+                changed = true;
+            } else if (strncmp(token, "CGPU=", 5) == 0) {
+                gui_settings.arc_color_gpu = strtol(token + 5, NULL, 16);
+                changed = true;
+            } else if (strncmp(token, "CRAM=", 5) == 0) {
+                gui_settings.bar_color_ram = strtol(token + 5, NULL, 16);
+                changed = true;
+            }
+            token = strtok(NULL, ",");
+        }
+        
+        if (changed) {
+            ESP_LOGI(TAG, "GUI CFG Applied & Saved");
+            gui_settings_save();
+            if (s_theme_apply_callback) {
+                s_theme_apply_callback();
+            }
+        }
+        return true;
     }
     return false;
 }

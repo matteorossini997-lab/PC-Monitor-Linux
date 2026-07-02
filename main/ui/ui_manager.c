@@ -99,10 +99,24 @@ void ui_manager_apply_theme(void)
         if (scr->screen) {
             lv_obj_set_style_bg_color(scr->screen, lv_color_hex(gui_settings.bg_color[0]), 0);
         }
-        
-        // Use individual colors for arcs based on settings if available, else keep defaults.
-        // The screen creation applies default palettes (red, green, blue, yellow).
-        // This can be expanded to fully support theme color application.
+    }
+
+    /* --- Split Ring Screen --- */
+    if (s_screens && s_screens->split_ring) {
+        screen_split_ring_t *scr = s_screens->split_ring;
+        if (scr->screen) {
+            lv_obj_set_style_bg_color(scr->screen, lv_color_hex(gui_settings.bg_color[0]), 0);
+            screen_split_ring_apply_colors(scr, &gui_settings);
+        }
+    }
+
+    /* --- Switch Active Screen --- */
+    if (s_screens) {
+        if (gui_settings.active_screen == 0 && s_screens->main) {
+            lv_screen_load(s_screens->main->screen);
+        } else if (gui_settings.active_screen == 1 && s_screens->split_ring) {
+            lv_screen_load(s_screens->split_ring->screen);
+        }
     }
 
     /* --- Screensaver background --- */
