@@ -144,6 +144,10 @@ static void parse_pc_data(const char *line)
             }
             fields_parsed++;
         }
+        else if (strncmp(token, "RAMT:", 5) == 0) {
+            temp_stats.ram_temp = atof(token + 5);
+            fields_parsed++;
+        }
         else if (strncmp(token, "NET:", 4) == 0) {
             strncpy(temp_stats.net_type, token + 4, sizeof(temp_stats.net_type) - 1);
             temp_stats.net_type[sizeof(temp_stats.net_type) - 1] = '\0';
