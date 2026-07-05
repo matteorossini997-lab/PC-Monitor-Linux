@@ -88,8 +88,7 @@ bool gui_settings_load(void)
     if (f == NULL) {
         ESP_LOGW(TAG, "No gui_config.bin found, using defaults");
         gui_settings_init_defaults(&gui_settings);
-        /* Save defaults to LittleFS for next boot */
-        gui_settings_save();
+        /* Do NOT save defaults to LittleFS here to avoid brownout on first boot */
         return false;
     }
 
@@ -211,21 +210,24 @@ bool gui_settings_handle_command(const char *line)
         char *token = strtok(buffer, ",");
         while (token != NULL) {
             if (strncmp(token, "SCR=", 4) == 0) {
-                gui_settings.active_screen = atoi(token + 4);
-                changed = true;
+                uint8_t new_scr = atoi(token + 4);
+                if (gui_settings.active_screen != new_scr) { gui_settings.active_screen = new_scr; changed = true; }
             } else if (strncmp(token, "BG=", 3) == 0) {
-                gui_settings.bg_color[0] = strtol(token + 3, NULL, 16);
-                gui_settings.bg_color[1] = gui_settings.bg_color[0];
-                changed = true;
+                uint32_t new_bg = strtol(token + 3, NULL, 16);
+                if (gui_settings.bg_color[0] != new_bg) {
+                    gui_settings.bg_color[0] = new_bg;
+                    gui_settings.bg_color[1] = new_bg;
+                    changed = true;
+                }
             } else if (strncmp(token, "CCPU=", 5) == 0) {
-                gui_settings.arc_color_cpu = strtol(token + 5, NULL, 16);
-                changed = true;
+                uint32_t new_ccpu = strtol(token + 5, NULL, 16);
+                if (gui_settings.arc_color_cpu != new_ccpu) { gui_settings.arc_color_cpu = new_ccpu; changed = true; }
             } else if (strncmp(token, "CGPU=", 5) == 0) {
-                gui_settings.arc_color_gpu = strtol(token + 5, NULL, 16);
-                changed = true;
+                uint32_t new_cgpu = strtol(token + 5, NULL, 16);
+                if (gui_settings.arc_color_gpu != new_cgpu) { gui_settings.arc_color_gpu = new_cgpu; changed = true; }
             } else if (strncmp(token, "CRAM=", 5) == 0) {
-                gui_settings.bar_color_ram = strtol(token + 5, NULL, 16);
-                changed = true;
+                uint32_t new_cram = strtol(token + 5, NULL, 16);
+                if (gui_settings.bar_color_ram != new_cram) { gui_settings.bar_color_ram = new_cram; changed = true; }
             }
             token = strtok(NULL, ",");
         }

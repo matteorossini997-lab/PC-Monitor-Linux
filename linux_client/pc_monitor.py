@@ -192,16 +192,14 @@ class HardwareMonitor:
             "UP": round(up_mbps, 1)
         }
 
-def find_scarab_port():
-    ports = glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*')
-    for port in ports:
+def connect_scarab():
+    import os
+    if os.path.exists('/dev/ttyACM0'):
         try:
-            with serial.Serial(port, 115200, timeout=2) as ser:
-                ser.write(b"WHO_ARE_YOU?\n")
-                response = ser.readline().decode('ascii', errors='ignore').strip()
-                if "SCARAB_CLIENT_OK" in response:
-                    return port
-        except serial.SerialException:
+            ser = serial.Serial('/dev/ttyACM0', 115200, write_timeout=2)
+            time.sleep(4) # Wait for ESP32 to fully boot and initialize USB CDC
+            return ser
+        except Exception:
             pass
     return None
 
@@ -221,28 +219,41 @@ def main():
             time.sleep(1)
 
     print("Scanning for Scarab Monitor...")
-    port = find_scarab_port()
-    if not port:
+    ser = connect_scarab()
+    if not ser:
         print("Error: Could not find Scarab Monitor on any /dev/ttyUSB* or /dev/ttyACM* port.")
         sys.exit(1)
         
-    print(f"Connected to {port}")
+    print(f"Connected to {ser.port}")
     
-    with serial.Serial(port, 115200) as ser:
-        cfg_str = f"CFG:SCR={CFG_ACTIVE_SCREEN},BG={CFG_BG_COLOR},CCPU={CFG_COLOR_CPU},CGPU={CFG_COLOR_GPU},CRAM={CFG_COLOR_RAM}\n"
-        print(f"Sending UI Config: {cfg_str.strip()}")
-        ser.write(cfg_str.encode('ascii'))
-        time.sleep(0.5)
-        
+    import threading
+    def reader():
         while True:
             try:
-                stats = monitor.get_stats()
-                data_str = f"CPU:{stats['CPU']},CPUT:{stats['CPUT']},GPU:{stats['GPU']},GPUT:{stats['GPUT']},VRAM:{stats['VRAM']},RAM:{stats['RAM']},PWR:{stats['PWR']},NET:{stats['NET']},SPEED:{stats['SPEED']},DOWN:{stats['DOWN']},UP:{stats['UP']}\n"
-                ser.write(data_str.encode('ascii'))
-                time.sleep(0.1)
+                line = ser.readline()
+                if line:
+                    print(f"[ESP32] {line.decode('ascii', errors='ignore').strip()}")
             except Exception as e:
-                print(f"Error: {e}")
-                time.sleep(1)
+                pass
+    threading.Thread(target=reader, daemon=True).start()
+
+    cfg_str = f"CFG:SCR={CFG_ACTIVE_SCREEN},BG={CFG_BG_COLOR},CCPU={CFG_COLOR_CPU},CGPU={CFG_COLOR_GPU},CRAM={CFG_COLOR_RAM}\n"
+    print(f"Sending UI Config: {cfg_str.strip()}", flush=True)
+    ser.write(cfg_str.encode('ascii'))
+    print("UI Config sent successfully", flush=True)
+    time.sleep(0.5)
+    
+    print("Entering main loop", flush=True)
+    while True:
+        try:
+            stats = monitor.get_stats()
+            data_str = f"CPU:{stats['CPU']},CPUT:{stats['CPUT']},GPU:{stats['GPU']},GPUT:{stats['GPUT']},VRAM:{stats['VRAM']},RAM:{stats['RAM']},PWR:{stats['PWR']},NET:{stats['NET']},SPEED:{stats['SPEED']},DOWN:{stats['DOWN']},UP:{stats['UP']}\n"
+            print(f"[PC] Sending: {data_str.strip()}", flush=True)
+            ser.write(data_str.encode('ascii'))
+            time.sleep(0.1)
+        except Exception as e:
+            print(f"Error: {e}")
+            time.sleep(1)
 
 if __name__ == "__main__":
     main()

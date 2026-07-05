@@ -303,6 +303,6 @@ void usb_serial_start_rx_task(SemaphoreHandle_t stats_mutex)
 
     /* Create USB RX task with hardened configuration */
     xTaskCreate(usb_rx_task, "usb_rx", STACK_SIZE_USB_RX, NULL, PRIO_USB_RX, NULL);
-    xTaskCreate(wokwi_mock_task, "wokwi_mock", 8192, NULL, PRIO_USB_RX, NULL);
+    // xTaskCreate(wokwi_mock_task, "wokwi_mock", 8192, NULL, PRIO_USB_RX, NULL);
     ESP_LOGI(TAG, "USB RX Task created (stack: %d, prio: %d)", STACK_SIZE_USB_RX, PRIO_USB_RX);
 }
