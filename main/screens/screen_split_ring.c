@@ -137,9 +137,17 @@ static void update_segment(lv_obj_t *arc, lv_obj_t *label, const char *prefix,
     }
     
     if (usage_pct >= 0) {
-        lv_label_set_text_fmt(label, "%s: %d%% %s°C", prefix, usage_pct, temp_str);
+        if (strcmp(prefix, "RAM") == 0) {
+            lv_label_set_text_fmt(label, "%s: %d%% %sW", prefix, usage_pct, temp_str);
+        } else {
+            lv_label_set_text_fmt(label, "%s: %d%% %s°C", prefix, usage_pct, temp_str);
+        }
     } else {
-        lv_label_set_text_fmt(label, "%s: N/A %s°C", prefix, temp_str);
+        if (strcmp(prefix, "RAM") == 0) {
+            lv_label_set_text_fmt(label, "%s: N/A %sW", prefix, temp_str);
+        } else {
+            lv_label_set_text_fmt(label, "%s: N/A %s°C", prefix, temp_str);
+        }
     }
 }
 
@@ -147,9 +155,9 @@ void screen_split_ring_update(screen_split_ring_t *scr, const pc_stats_t *stats)
 {
     if (!scr || !stats) return;
 
-    // RAM calculation
-    int ram_pct = -1;
-    if (stats->ram_total_gb > 0) {
+    // Convert RAM to percentage
+    int ram_pct = 0;
+    if (stats->ram_total_gb > 0.0f && stats->ram_used_gb >= 0.0f) {
         ram_pct = (int)((stats->ram_used_gb / stats->ram_total_gb) * 100.0f);
     }
 
@@ -163,7 +171,7 @@ void screen_split_ring_update(screen_split_ring_t *scr, const pc_stats_t *stats)
 
     // Update RAM (span 120)
     update_segment(scr->arc_ram, scr->label_ram, "RAM", 
-                   ram_pct, stats->ram_temp, scr->color_ram, 120);
+                   ram_pct, stats->gpu_power, scr->color_ram, 120);
 }
 
 void screen_split_ring_apply_colors(screen_split_ring_t *scr, const void *gui_settings_ptr)

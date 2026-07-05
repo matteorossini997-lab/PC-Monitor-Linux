@@ -144,8 +144,8 @@ static void parse_pc_data(const char *line)
             }
             fields_parsed++;
         }
-        else if (strncmp(token, "RAMT:", 5) == 0) {
-            temp_stats.ram_temp = atof(token + 5);
+        else if (strncmp(token, "PWR:", 4) == 0) {
+            temp_stats.gpu_power = atof(token + 4);
             fields_parsed++;
         }
         else if (strncmp(token, "NET:", 4) == 0) {
