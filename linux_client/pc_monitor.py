@@ -1,259 +1,364 @@
-import time
-import sys
+#!/usr/bin/env python3
+"""Scarab Monitor client for headless Linux systems and the AMD BC-250.
+
+The client keeps nvtop as the primary AMD telemetry source, starts without a
+running desktop session, and reconnects automatically after USB disconnects or
+ESP32 resets.
+"""
+
+from __future__ import annotations
+
 import glob
+import json
+import os
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+from typing import Any, Iterable, Optional
+
 import psutil
 import serial
-import os
 
-# ==============================================================================
-# ESP32 UI CONFIGURATION
-# ==============================================================================
-# Change these values to configure the UI on the ESP32!
-# Values will be automatically sent when the script starts.
-# Colors must be 6-character HEX strings (without '#')
-CFG_ACTIVE_SCREEN = 1      # 0 = Unified, 1 = Split Ring
-CFG_BG_COLOR      = "FFFFFF" # White background
-CFG_COLOR_CPU     = "0071C5" # Intel Blue
-CFG_COLOR_GPU     = "76B900" # NVIDIA Green
-CFG_COLOR_RAM     = "888888" # Gray
-# ==============================================================================
-try:
-    import pynvml
-    NVML_AVAILABLE = True
-except ImportError:
-    NVML_AVAILABLE = False
+BAUD = 115200
+SAMPLE_SECONDS = float(os.getenv("SCARAB_SAMPLE_SECONDS", "0.5"))
+RECONNECT_SECONDS = float(os.getenv("SCARAB_RECONNECT_SECONDS", "3"))
+PORT_OVERRIDE = os.getenv("SCARAB_PORT", "").strip()
+REQUIRE_HANDSHAKE = os.getenv("SCARAB_REQUIRE_HANDSHAKE", "1") != "0"
 
-class HardwareMonitor:
-    def __init__(self):
-        self.net_io_start = psutil.net_io_counters()
-        self.last_time = time.time()
-        self.amd_gpu_path = self._find_amd_gpu()
-        
-        if NVML_AVAILABLE:
-            try:
-                pynvml.nvmlInit()
-                self.nvml_handle = pynvml.nvmlDeviceGetHandleByIndex(0)
-                self.gpu_vendor = "NVIDIA"
-            except pynvml.NVMLError:
-                self.gpu_vendor = "AMD" if self.amd_gpu_path else "UNKNOWN"
-        else:
-            self.gpu_vendor = "AMD" if self.amd_gpu_path else "UNKNOWN"
+CFG_ACTIVE_SCREEN = int(os.getenv("SCARAB_SCREEN", "1"))
+CFG_BG_COLOR = os.getenv("SCARAB_BG", "FFFFFF")
+CFG_COLOR_CPU = os.getenv("SCARAB_CPU_COLOR", "0071C5")
+CFG_COLOR_GPU = os.getenv("SCARAB_GPU_COLOR", "76B900")
+CFG_COLOR_RAM = os.getenv("SCARAB_RAM_COLOR", "888888")
 
-        self.last_amdgpu_top_load = 0
-        self.last_amdgpu_top_vram_temp = -1
-        self.last_amdgpu_top_time = 0
-        
-        self.last_nvtop_load = 0
-        self.last_nvtop_time = 0
 
-    def _get_nvtop_stats(self):
-        current_time = time.time()
-        if hasattr(self, 'last_nvtop_time') and current_time - self.last_nvtop_time < 1.0:
-            return getattr(self, 'last_nvtop_stats', (-1, -1, 0, 0, -1))
-            
-        import subprocess
-        import json
-        load, temp, vram_used, vram_total, power = -1, -1, 0, 0, -1
-        try:
-            out = subprocess.check_output(['nvtop', '-s'], stderr=subprocess.DEVNULL, timeout=1)
-            out_str = out.decode('utf-8').strip()
-            data = json.loads(out_str)
-            if isinstance(data, dict) and "Devices" in data:
-                data = data["Devices"]
-            if isinstance(data, list) and len(data) > 0:
-                device = data[0]
-                
-                # Load
-                if "gpu_util" in device:
-                    val = str(device["gpu_util"]).replace("%", "")
-                    if val.isdigit(): load = int(val)
-                elif "GPU rate" in device:
-                    load = int(device["GPU rate"])
-                    
-                # Temp
-                if "temp" in device:
-                    val = str(device["temp"]).replace("C", "")
-                    if val.isdigit(): temp = float(val)
-                        
-                # Power
-                if "power_draw" in device:
-                    val = str(device["power_draw"]).replace("W", "")
-                    if val.isdigit(): power = float(val)
-                        
-                # VRAM
-                if "mem_used" in device:
-                    vram_used = float(device["mem_used"]) / (1024**3)
-                if "mem_total" in device:
-                    vram_total = float(device["mem_total"]) / (1024**3)
-        except Exception:
-            pass
-            
-        self.last_nvtop_stats = (load, temp, vram_used, vram_total, power)
-        self.last_nvtop_time = current_time
-        return self.last_nvtop_stats
-
-    def _find_amd_gpu(self):
-        for card in glob.glob('/sys/class/drm/card[0-9]*'):
-            vendor_path = os.path.join(card, 'device/vendor')
-            if os.path.exists(vendor_path):
-                try:
-                    with open(vendor_path, 'r') as f:
-                        if f.read().strip() == '0x1002':
-                            return card
-                except: pass
-                
-        for card in glob.glob('/sys/class/drm/card[0-9]*'):
-            hwmons = glob.glob(os.path.join(card, 'device/hwmon/hwmon*'))
-            for hwmon in hwmons:
-                name_path = os.path.join(hwmon, 'name')
-                if os.path.exists(name_path):
-                    try:
-                        with open(name_path, 'r') as f:
-                            if f.read().strip() == 'amdgpu':
-                                return card
-                    except: pass
+def _read_number(path: Path, divisor: float = 1.0) -> Optional[float]:
+    try:
+        return float(path.read_text(encoding="ascii").strip()) / divisor
+    except (OSError, ValueError):
         return None
 
-    def get_cpu_temp(self):
-        if not hasattr(psutil, "sensors_temperatures"): return -1
-        temps = psutil.sensors_temperatures()
-        if not temps: return -1
-        
-        for name in ['coretemp', 'k10temp', 'zenpower', 'cpu_thermal']:
-            if name in temps and len(temps[name]) > 0:
-                return temps[name][0].current
-                
-        first_key = list(temps.keys())[0]
-        return temps[first_key][0].current
 
-    def get_amd_gpu_stats(self):
-        return self._get_nvtop_stats()
+def _first_existing(paths: Iterable[Path]) -> Optional[Path]:
+    return next((path for path in paths if path.exists()), None)
 
-    def get_ram_temp(self):
-        if not hasattr(psutil, "sensors_temperatures"): return -1
-        temps = psutil.sensors_temperatures()
-        if not temps: return -1
-        for name in ['jc42', 'spd5118']:
-            if name in temps and len(temps[name]) > 0: return temps[name][0].current
-        for name, entries in temps.items():
-            for entry in entries:
-                label = entry.label.lower() if entry.label else ""
-                if "ram" in label or "dimm" in label or "memory" in label:
-                    return entry.current
-        return -1
 
-    def get_stats(self):
-        cpu_load = psutil.cpu_percent(interval=None)
-        cpu_temp = self.get_cpu_temp()
-        
-        ram = psutil.virtual_memory()
-        ram_used = ram.used / (1024**3)
-        ram_total = ram.total / (1024**3)
-        
-        current_time = time.time()
-        time_diff = current_time - self.last_time
-        net_io = psutil.net_io_counters()
-        
-        if time_diff > 0:
-            down_mbps = ((net_io.bytes_recv - self.net_io_start.bytes_recv) * 8) / (1024**2) / time_diff
-            up_mbps = ((net_io.bytes_sent - self.net_io_start.bytes_sent) * 8) / (1024**2) / time_diff
-        else:
-            down_mbps, up_mbps = 0, 0
-            
-        self.net_io_start = net_io
-        self.last_time = current_time
-        
-        gpu_load, gpu_temp, vram_used, vram_total, power = -1, -1, 0, 0, -1
-        if self.gpu_vendor == "NVIDIA":
+def _numeric(value: Any, suffixes: tuple[str, ...] = ()) -> Optional[float]:
+    if value is None:
+        return None
+    text = str(value).strip()
+    for suffix in suffixes:
+        text = text.replace(suffix, "")
+    try:
+        return float(text.strip())
+    except ValueError:
+        return None
+
+
+class HardwareMonitor:
+    """Collect CPU, memory, network, and AMD GPU telemetry."""
+
+    def __init__(self) -> None:
+        self.net_previous = psutil.net_io_counters()
+        self.time_previous = time.monotonic()
+        self.amd_card = self._find_amd_card()
+        self.amd_hwmon = self._find_amdgpu_hwmon(self.amd_card)
+        self.last_nvtop_stats = (-1, -1.0, 0.0, 0.0, -1.0)
+        self.last_nvtop_time = 0.0
+        psutil.cpu_percent(interval=None)
+
+    @staticmethod
+    def _find_amd_card() -> Optional[Path]:
+        for value in sorted(glob.glob("/sys/class/drm/card[0-9]*")):
+            card = Path(value)
             try:
-                util = pynvml.nvmlDeviceGetUtilizationRates(self.nvml_handle)
-                gpu_load = util.gpu
-                gpu_temp = pynvml.nvmlDeviceGetTemperature(self.nvml_handle, pynvml.NVML_TEMPERATURE_GPU)
-                mem = pynvml.nvmlDeviceGetMemoryInfo(self.nvml_handle)
-                vram_used = mem.used / (1024**3)
-                vram_total = mem.total / (1024**3)
-                power = pynvml.nvmlDeviceGetPowerUsage(self.nvml_handle) / 1000.0
-            except pynvml.NVMLError:
-                pass
-        elif self.gpu_vendor == "AMD":
-            gpu_load, gpu_temp, vram_used, vram_total, power = self.get_amd_gpu_stats()
-            
+                if (card / "device/vendor").read_text(encoding="ascii").strip() == "0x1002":
+                    return card
+            except OSError:
+                continue
+        return None
+
+    @staticmethod
+    def _find_amdgpu_hwmon(card: Optional[Path]) -> Optional[Path]:
+        if card is None:
+            return None
+        for value in sorted(glob.glob(str(card / "device/hwmon/hwmon*"))):
+            path = Path(value)
+            try:
+                if (path / "name").read_text(encoding="ascii").strip() == "amdgpu":
+                    return path
+            except OSError:
+                continue
+        return None
+
+    @staticmethod
+    def cpu_temperature() -> float:
+        try:
+            temperatures = psutil.sensors_temperatures()
+        except (AttributeError, OSError):
+            return -1.0
+
+        for name in ("k10temp", "zenpower", "coretemp", "cpu_thermal"):
+            if name in temperatures and temperatures[name]:
+                return float(temperatures[name][0].current)
+        for entries in temperatures.values():
+            if entries:
+                return float(entries[0].current)
+        return -1.0
+
+    def _nvtop_stats(self) -> tuple[int, float, float, float, float]:
+        """Read AMD telemetry from nvtop, the primary source on the BC-250."""
+        now = time.monotonic()
+        if now - self.last_nvtop_time < 1.0:
+            return self.last_nvtop_stats
+
+        try:
+            output = subprocess.check_output(
+                ["nvtop", "-s"],
+                stderr=subprocess.DEVNULL,
+                timeout=2,
+                text=True,
+            )
+            data = json.loads(output.strip())
+            if isinstance(data, dict):
+                data = data.get("Devices", data.get("devices", data))
+            if isinstance(data, dict):
+                devices = [data]
+            elif isinstance(data, list):
+                devices = data
+            else:
+                devices = []
+
+            device = next((item for item in devices if isinstance(item, dict)), None)
+            if device is None:
+                raise ValueError("nvtop returned no GPU device")
+
+            load_value = next(
+                (
+                    device.get(key)
+                    for key in ("gpu_util", "GPU rate", "gpu_utilization_percent", "gpu_utilization_rate")
+                    if key in device
+                ),
+                None,
+            )
+            temp_value = next(
+                (device.get(key) for key in ("temp", "temperature", "gpu_temp") if key in device),
+                None,
+            )
+            power_value = next(
+                (device.get(key) for key in ("power_draw", "power", "gpu_power") if key in device),
+                None,
+            )
+            used_value = next(
+                (device.get(key) for key in ("mem_used", "memory_used", "vram_used") if key in device),
+                None,
+            )
+            total_value = next(
+                (device.get(key) for key in ("mem_total", "memory_total", "vram_total") if key in device),
+                None,
+            )
+
+            load = _numeric(load_value, ("%",))
+            temperature = _numeric(temp_value, ("°C", "C"))
+            power = _numeric(power_value, ("W",))
+            used_bytes = _numeric(used_value)
+            total_bytes = _numeric(total_value)
+
+            stats = (
+                int(load) if load is not None else -1,
+                round(temperature, 1) if temperature is not None else -1.0,
+                (used_bytes / 1024**3) if used_bytes is not None else 0.0,
+                (total_bytes / 1024**3) if total_bytes is not None else 0.0,
+                round(power, 1) if power is not None else -1.0,
+            )
+            self.last_nvtop_stats = stats
+            self.last_nvtop_time = now
+            return stats
+        except (FileNotFoundError, subprocess.SubprocessError, json.JSONDecodeError, ValueError):
+            return self._sysfs_gpu_stats()
+
+    def _sysfs_gpu_stats(self) -> tuple[int, float, float, float, float]:
+        """Fallback only: use amdgpu sysfs when nvtop is unavailable."""
+        if self.amd_card is None:
+            return -1, -1.0, 0.0, 0.0, -1.0
+
+        device = self.amd_card / "device"
+        load = _read_number(device / "gpu_busy_percent")
+        temperature = None
+        power = None
+
+        if self.amd_hwmon is not None:
+            temperature_path = _first_existing(
+                self.amd_hwmon / name for name in ("temp1_input", "temp2_input", "temp3_input")
+            )
+            if temperature_path:
+                temperature = _read_number(temperature_path, 1000.0)
+
+            power_path = _first_existing(
+                self.amd_hwmon / name for name in ("power1_average", "power1_input")
+            )
+            if power_path:
+                power = _read_number(power_path, 1_000_000.0)
+
+        used_path = _first_existing(
+            device / name for name in ("mem_info_gtt_used", "mem_info_vram_used")
+        )
+        total_path = _first_existing(
+            device / name for name in ("mem_info_gtt_total", "mem_info_vram_total")
+        )
+        used = _read_number(used_path, 1024**3) if used_path else 0.0
+        total = _read_number(total_path, 1024**3) if total_path else 0.0
+
+        return (
+            int(load) if load is not None else -1,
+            round(temperature, 1) if temperature is not None else -1.0,
+            float(used or 0.0),
+            float(total or 0.0),
+            round(power, 1) if power is not None else -1.0,
+        )
+
+    def snapshot(self) -> dict[str, object]:
+        now = time.monotonic()
+        current_net = psutil.net_io_counters()
+        elapsed = max(now - self.time_previous, 0.001)
+        down_mbps = (current_net.bytes_recv - self.net_previous.bytes_recv) * 8 / 1024**2 / elapsed
+        up_mbps = (current_net.bytes_sent - self.net_previous.bytes_sent) * 8 / 1024**2 / elapsed
+        self.net_previous = current_net
+        self.time_previous = now
+
+        ram = psutil.virtual_memory()
+        gpu_load, gpu_temp, gpu_used, gpu_total, power = self._nvtop_stats()
+
         return {
-            "CPU": int(cpu_load),
-            "CPUT": round(cpu_temp, 1),
-            "GPU": int(gpu_load),
-            "GPUT": round(gpu_temp, 1),
-            "VRAM": f"{vram_used:.1f}/{vram_total:.1f}",
-            "PWR": round(power, 1),
-            "RAM": f"{ram_used:.1f}/{ram_total:.1f}",
+            "CPU": int(psutil.cpu_percent(interval=None)),
+            "CPUT": round(self.cpu_temperature(), 1),
+            "GPU": gpu_load,
+            "GPUT": gpu_temp,
+            "VRAM": f"{gpu_used:.1f}/{gpu_total:.1f}",
+            "RAM": f"{ram.used / 1024**3:.1f}/{ram.total / 1024**3:.1f}",
+            "PWR": power,
             "NET": "LAN",
-            "SPEED": "1000 Mbps",
+            "SPEED": "AUTO",
             "DOWN": round(down_mbps, 1),
-            "UP": round(up_mbps, 1)
+            "UP": round(up_mbps, 1),
         }
 
-def connect_scarab():
-    import os
-    if os.path.exists('/dev/ttyACM0'):
-        try:
-            ser = serial.Serial('/dev/ttyACM0', 115200, write_timeout=2)
-            time.sleep(4) # Wait for ESP32 to fully boot and initialize USB CDC
-            return ser
-        except Exception:
-            pass
-    return None
 
-def main():
-    test_mode = "--test" in sys.argv
-    monitor = HardwareMonitor()
-    psutil.cpu_percent(interval=None)
-    time.sleep(0.5)
+def serial_candidates() -> list[str]:
+    if PORT_OVERRIDE:
+        return [PORT_OVERRIDE]
+    values: list[str] = []
+    for pattern in ("/dev/serial/by-id/*", "/dev/ttyACM*", "/dev/ttyUSB*"):
+        values.extend(sorted(glob.glob(pattern)))
+    return list(dict.fromkeys(values))
 
-    if test_mode:
-        print("====== HARDWARE MONITOR TEST MODE ======")
-        print(f"Detected GPU Vendor: {monitor.gpu_vendor}")
-        while True:
-            stats = monitor.get_stats()
-            data_str = f"CPU:{stats['CPU']},CPUT:{stats['CPUT']},GPU:{stats['GPU']},GPUT:{stats['GPUT']},VRAM:{stats['VRAM']},RAM:{stats['RAM']},PWR:{stats['PWR']},NET:{stats['NET']},SPEED:{stats['SPEED']},DOWN:{stats['DOWN']},UP:{stats['UP']}\n"
-            print(data_str.strip())
-            time.sleep(1)
 
-    print("Scanning for Scarab Monitor...")
-    ser = connect_scarab()
-    if not ser:
-        print("Error: Could not find Scarab Monitor on any /dev/ttyUSB* or /dev/ttyACM* port.")
-        sys.exit(1)
-        
-    print(f"Connected to {ser.port}")
-    
-    import threading
-    def reader():
-        while True:
-            try:
-                line = ser.readline()
-                if line:
-                    print(f"[ESP32] {line.decode('ascii', errors='ignore').strip()}")
-            except Exception as e:
-                pass
-    threading.Thread(target=reader, daemon=True).start()
+def _is_scarab(connection: serial.Serial) -> bool:
+    if not REQUIRE_HANDSHAKE:
+        return True
+    try:
+        connection.reset_input_buffer()
+        connection.write(b"WHO_ARE_YOU?\n")
+        connection.flush()
+        deadline = time.monotonic() + 2.0
+        while time.monotonic() < deadline:
+            line = connection.readline().decode("ascii", errors="ignore").strip()
+            if line == "SCARAB_CLIENT_OK":
+                return True
+        return False
+    except (OSError, serial.SerialException):
+        return False
 
-    cfg_str = f"CFG:SCR={CFG_ACTIVE_SCREEN},BG={CFG_BG_COLOR},CCPU={CFG_COLOR_CPU},CGPU={CFG_COLOR_GPU},CRAM={CFG_COLOR_RAM}\n"
-    print(f"Sending UI Config: {cfg_str.strip()}", flush=True)
-    ser.write(cfg_str.encode('ascii'))
-    print("UI Config sent successfully", flush=True)
-    time.sleep(0.5)
-    
-    print("Entering main loop", flush=True)
+
+def connect_forever() -> serial.Serial:
     while True:
+        for port in serial_candidates():
+            connection: Optional[serial.Serial] = None
+            try:
+                connection = serial.Serial(
+                    port,
+                    BAUD,
+                    timeout=0.2,
+                    write_timeout=2,
+                    exclusive=True,
+                )
+                time.sleep(4)
+                if not _is_scarab(connection):
+                    connection.close()
+                    continue
+                print(f"Connected to Scarab Monitor on {port}", flush=True)
+                return connection
+            except (OSError, serial.SerialException):
+                if connection is not None:
+                    connection.close()
+                continue
+        print("Scarab Monitor not found; retrying...", flush=True)
+        time.sleep(RECONNECT_SECONDS)
+
+
+def start_reader(connection: serial.Serial, stop: threading.Event) -> threading.Thread:
+    def reader() -> None:
+        while not stop.is_set():
+            try:
+                line = connection.readline()
+                if line:
+                    print(f"[ESP32] {line.decode('ascii', errors='ignore').strip()}", flush=True)
+            except (OSError, serial.SerialException):
+                return
+
+    thread = threading.Thread(target=reader, daemon=True)
+    thread.start()
+    return thread
+
+
+def send_configuration(connection: serial.Serial) -> None:
+    text = (
+        f"CFG:SCR={CFG_ACTIVE_SCREEN},BG={CFG_BG_COLOR},CCPU={CFG_COLOR_CPU},"
+        f"CGPU={CFG_COLOR_GPU},CRAM={CFG_COLOR_RAM}\n"
+    )
+    connection.write(text.encode("ascii"))
+    connection.flush()
+
+
+def format_snapshot(values: dict[str, object]) -> str:
+    return (
+        f"CPU:{values['CPU']},CPUT:{values['CPUT']},GPU:{values['GPU']},"
+        f"GPUT:{values['GPUT']},VRAM:{values['VRAM']},RAM:{values['RAM']},"
+        f"PWR:{values['PWR']},NET:{values['NET']},SPEED:{values['SPEED']},"
+        f"DOWN:{values['DOWN']},UP:{values['UP']}\n"
+    )
+
+
+def main() -> None:
+    if "--test" in sys.argv:
+        monitor = HardwareMonitor()
+        while True:
+            print(format_snapshot(monitor.snapshot()).strip(), flush=True)
+            time.sleep(max(SAMPLE_SECONDS, 1.0))
+
+    monitor = HardwareMonitor()
+    while True:
+        connection = connect_forever()
+        stop = threading.Event()
+        start_reader(connection, stop)
         try:
-            stats = monitor.get_stats()
-            data_str = f"CPU:{stats['CPU']},CPUT:{stats['CPUT']},GPU:{stats['GPU']},GPUT:{stats['GPUT']},VRAM:{stats['VRAM']},RAM:{stats['RAM']},PWR:{stats['PWR']},NET:{stats['NET']},SPEED:{stats['SPEED']},DOWN:{stats['DOWN']},UP:{stats['UP']}\n"
-            print(f"[PC] Sending: {data_str.strip()}", flush=True)
-            ser.write(data_str.encode('ascii'))
-            time.sleep(0.1)
-        except Exception as e:
-            print(f"Error: {e}")
-            time.sleep(1)
+            send_configuration(connection)
+            while True:
+                connection.write(format_snapshot(monitor.snapshot()).encode("ascii"))
+                connection.flush()
+                time.sleep(SAMPLE_SECONDS)
+        except (OSError, serial.SerialException) as error:
+            print(f"Serial disconnected: {error}", flush=True)
+        finally:
+            stop.set()
+            try:
+                connection.close()
+            except OSError:
+                pass
+            time.sleep(2)
+
 
 if __name__ == "__main__":
     main()
