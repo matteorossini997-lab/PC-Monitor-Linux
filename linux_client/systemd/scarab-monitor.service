@@ -1,0 +1,19 @@
+[Unit]
+Description=Scarab PC Monitor headless client
+After=multi-user.target
+
+[Service]
+Type=simple
+User=bc250ai
+Group=bc250ai
+SupplementaryGroups=uucp video render
+WorkingDirectory=/opt/PC-Monitor-Linux/linux_client
+ExecStart=/usr/bin/python /opt/PC-Monitor-Linux/linux_client/pc_monitor.py
+Restart=always
+RestartSec=3
+Environment=PYTHONUNBUFFERED=1
+Environment=SCARAB_SAMPLE_SECONDS=0.5
+Environment=SCARAB_REQUIRE_HANDSHAKE=1
+
+[Install]
+WantedBy=multi-user.target
