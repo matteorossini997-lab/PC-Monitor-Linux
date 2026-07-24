@@ -1,0 +1,2 @@
+# Espressif USB CDC/JTAG serial devices. Restrict access to members of uucp.
+SUBSYSTEM=="tty", ATTRS{idVendor}=="303a", MODE="0660", GROUP="uucp", TAG+="systemd"
