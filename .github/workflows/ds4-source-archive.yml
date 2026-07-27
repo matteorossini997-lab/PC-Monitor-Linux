@@ -1,0 +1,39 @@
+name: DS4 source archive
+
+on:
+  push:
+    branches:
+      - automation/ds4-source-archive
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Download upstream DwarfStar repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --depth 1 https://github.com/antirez/ds4.git ds4
+          rm -rf ds4/.git
+
+      - name: Record upstream revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          git ls-remote https://github.com/antirez/ds4.git refs/heads/main | awk '{print $1}' > ds4/UPSTREAM_COMMIT.txt
+
+      - name: Upload source tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: ds4-upstream-main
+          path: ds4
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
