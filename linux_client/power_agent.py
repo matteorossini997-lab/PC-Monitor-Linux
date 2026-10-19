@@ -7,7 +7,6 @@ no TCP listener; remote control terminates on the authenticated ESP32 HTTPS API.
 import argparse
 import logging
 import os
-from pathlib import Path
 import select
 import signal
 import socket
@@ -15,8 +14,9 @@ import stat
 import struct
 import subprocess
 import time
+from pathlib import Path
 
-from power_protocol import LineDecoder, PowerProtocol, RUNTIME_EVENTS
+from power_protocol import RUNTIME_EVENTS, LineDecoder, PowerProtocol
 
 LOG = logging.getLogger("bc250-agent")
 
@@ -186,14 +186,19 @@ def main(argv=None):
                                     connected = True
                                     protocol.event("RESUMED")
                                     if monitor is not None:
-                                        from pc_monitor import (CFG_ACTIVE_SCREEN, CFG_BG_COLOR,
-                                            CFG_COLOR_CPU, CFG_COLOR_GPU, CFG_COLOR_RAM)
+                                        from pc_monitor import (
+                                            CFG_ACTIVE_SCREEN,
+                                            CFG_BG_COLOR,
+                                            CFG_COLOR_CPU,
+                                            CFG_COLOR_GPU,
+                                            CFG_COLOR_RAM,
+                                        )
                                         send(f"CFG:SCR={CFG_ACTIVE_SCREEN},BG={CFG_BG_COLOR},CCPU={CFG_COLOR_CPU},"
                                              f"CGPU={CFG_COLOR_GPU},CRAM={CFG_COLOR_RAM}\n")
                                     LOG.info("Scarab power bridge connected")
-                            elif connected and not protocol.handle(line):
-                                if line.startswith(("PWR_NET:", "PWR_ERROR:", "PWR_RESULT:")):
-                                    LOG.info("%s", line)
+                            elif (connected and not protocol.handle(line) and
+                                  line.startswith(("PWR_NET:", "PWR_ERROR:", "PWR_RESULT:"))):
+                                LOG.info("%s", line)
                         if not connected:
                             if now - started > 15:
                                 raise OSError("Scarab handshake timed out")

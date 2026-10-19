@@ -67,4 +67,4 @@ idf_component_register(
         nvs_flash
 )
 
-littlefs_create_partition_image(storage lfs FLASH_IN_PROJECT)
+littlefs_create_partition_image(storage "${PROJECT_DIR}/lfs" FLASH_IN_PROJECT)

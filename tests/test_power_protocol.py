@@ -1,12 +1,12 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "linux_client"))
 
-from power_protocol import LineDecoder, PowerProtocol
 from power_event import main as event_main
-from unittest.mock import patch
+from power_protocol import LineDecoder, PowerProtocol
 
 
 class ProtocolTests(unittest.TestCase):

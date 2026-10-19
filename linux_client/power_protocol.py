@@ -1,7 +1,7 @@
 """Bounded, transport-independent BC250 protocol; never constructs shell commands."""
 
-from collections import OrderedDict
 import re
+from collections import OrderedDict
 
 _REQUEST = re.compile(r"PWR_REQUEST:([0-9]{1,10}):(STOP|SLEEP)\Z", re.ASCII)
 _ACTIONS = {"STOP": "poweroff", "SLEEP": "suspend"}

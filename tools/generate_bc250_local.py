@@ -4,10 +4,10 @@
 import argparse
 import ipaddress
 import os
-from pathlib import Path
 import re
 import secrets
 import subprocess
+from pathlib import Path
 
 
 def main():

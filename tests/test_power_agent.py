@@ -1,18 +1,18 @@
 import os
-from pathlib import Path
+import signal
 import socket
 import sys
 import tempfile
 import threading
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
-import signal
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "linux_client"))
 from power_agent import LifecycleServer, main, open_serial, run_system_action
-from power_protocol import PowerProtocol
 from power_event import send_event
+from power_protocol import PowerProtocol
 
 
 class AgentTests(unittest.TestCase):
@@ -60,7 +60,7 @@ class AgentTests(unittest.TestCase):
                 def notify():
                     try:
                         send_event("SUSPENDING", str(path))
-                    except Exception as error:
+                    except (OSError, RuntimeError) as error:
                         failures.append(error)
                 thread = threading.Thread(target=notify)
                 thread.start()
@@ -94,9 +94,8 @@ class AgentTests(unittest.TestCase):
             path = Path(d) / "events.sock"
             with socket.socket(socket.AF_UNIX) as stale:
                 stale.bind(str(path))
-            with LifecycleServer(path):
-                with self.assertRaises(RuntimeError):
-                    LifecycleServer(path).__enter__()
+            with LifecycleServer(path), self.assertRaises(RuntimeError):
+                LifecycleServer(path).__enter__()
             self.assertFalse(path.exists())
 
     def test_cleanup_does_not_delete_replacement_file(self):
@@ -108,22 +107,21 @@ class AgentTests(unittest.TestCase):
             self.assertEqual(path.read_text(), "replacement")
 
     def test_socket_rejects_invalid_events_and_other_users(self):
-        with tempfile.TemporaryDirectory() as d:
-            with LifecycleServer(Path(d) / "events.sock") as server:
-                protocol = PowerProtocol(lambda line: None, lambda action: None)
-                for payload in (b"OFF_CONFIRMED\n", b"x" * 40 + b"\n", b"\xff\n"):
-                    with socket.socket(socket.AF_UNIX) as client:
-                        client.connect(str(server.path))
-                        client.sendall(payload)
-                        client.shutdown(socket.SHUT_WR)
-                        self.assertFalse(server.poll(protocol, 1))
+        with tempfile.TemporaryDirectory() as d, LifecycleServer(Path(d) / "events.sock") as server:
+            protocol = PowerProtocol(lambda line: None, lambda action: None)
+            for payload in (b"OFF_CONFIRMED\n", b"x" * 40 + b"\n", b"\xff\n"):
                 with socket.socket(socket.AF_UNIX) as client:
                     client.connect(str(server.path))
-                    client.sendall(b"RESUMED\n")
-                    with patch("power_agent.struct.unpack", return_value=(1, 987654, 1)):
-                        self.assertFalse(server.poll(protocol, 1))
-                    self.assertEqual(client.recv(32), b"DENIED\n")
-                self.assertFalse(server.poll(protocol, 0))
+                    client.sendall(payload)
+                    client.shutdown(socket.SHUT_WR)
+                    self.assertFalse(server.poll(protocol, 1))
+            with socket.socket(socket.AF_UNIX) as client:
+                client.connect(str(server.path))
+                client.sendall(b"RESUMED\n")
+                with patch("power_agent.struct.unpack", return_value=(1, 987654, 1)):
+                    self.assertFalse(server.poll(protocol, 1))
+                self.assertEqual(client.recv(32), b"DENIED\n")
+            self.assertFalse(server.poll(protocol, 0))
 
     def run_fake_agent(self, *, telemetry=False, dry_run=False, broken_write=False, silent=False):
         """Run the actual CLI loop with an in-memory serial device, never systemctl."""

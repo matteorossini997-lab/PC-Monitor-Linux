@@ -1,10 +1,10 @@
 import os
-from pathlib import Path
 import pty
 import subprocess
 import tempfile
 import tty
 import unittest
+from pathlib import Path
 
 
 class ShutdownHookTests(unittest.TestCase):
@@ -24,7 +24,7 @@ class ShutdownHookTests(unittest.TestCase):
         master, slave = pty.openpty()
         try:
             tty.setraw(slave)
-            result = subprocess.run([self.binary, action, os.ttyname(slave)], timeout=3)
+            result = subprocess.run([self.binary, action, os.ttyname(slave)], timeout=3, check=False)
             os.set_blocking(master, False)
             try:
                 data = os.read(master, 4096)

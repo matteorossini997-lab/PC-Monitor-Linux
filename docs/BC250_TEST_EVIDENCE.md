@@ -49,19 +49,22 @@ PYTHONPATH=linux_client /tmp/opencode/bc250-test-venv/bin/python -m coverage run
 | `power_fsm.c` | 99.37% lines |
 | `power_security.c` | 100% lines |
 | `power_protocol.py` | 100% combined statements/branches |
-| `power_agent.py` | 92% combined statements/branches |
+| `power_agent.py` | 93% combined statements/branches after refactor |
 | `power_event.py` | 86% combined statements/branches |
-| Python total | 94% rounded (93.70% exact) |
+| Python total | 94% rounded (93.93% exact after refactor) |
 
 TLS generation was smoke-tested in a temporary copy: key/token permissions,
 certificate SAN, matching key/certificate, valid private LAN address, refusal to
 overwrite, unchanged existing hashes and rejection of public/loopback IPs all
 passed. Secret contents were not printed. Python/shell syntax and
-`git diff --check` passed. Initial Ruff findings were style-only and are tracked
-separately from functional results.
+`git diff --check` passed. Initial Ruff style findings were fixed, then all host
+tests, coverage, Python/shell syntax and Ruff checks were rerun successfully.
+The LittleFS source path is now explicitly anchored to `${PROJECT_DIR}/lfs`;
+this path was inspected, not verified with an ESP-IDF build.
 
 Full local logs and exit codes are outside the repository in
-`/home/user/kicad-workspace/verification/software-final/`; earlier RED logs are
+`/home/user/kicad-workspace/verification/software-final/`; post-refactor logs are
+in adjacent `software-final-refactor/`; earlier RED logs are
 under adjacent `software-red*` directories. Checkpoint history preserves the
 RED stages above; do not interpret those intermediate commits as release builds.
 
@@ -80,3 +83,21 @@ RED stages above; do not interpret those intermediate commits as release builds.
 
 See [BC250_POWER.md](BC250_POWER.md) for setup and the safe handling of unknown
 latch state. Host tests passing is **not** approval to operate untested hardware.
+
+## Delivery self-evaluation
+
+Overall **3.4/5**: host-tested implementation, not a hardware-qualified release.
+
+| Axis | Score | Evidence / improvement |
+|---|---:|---|
+| Accuracy | 3 | Host behavior is tested; ESP-IDF APIs/linking and target behavior still need an actual target build |
+| Completeness | 3 | Requested control paths are implemented, but sleep support and TPMS1.9 behavior remain unmeasured |
+| Clarity | 4 | Dedicated safety/setup guide exists; historical four-display docs still require the prominent variant warning |
+| Actionability | 3 | Concrete setup steps exist; ESP-IDF installation and root-owned systemd deployment on the BC250 are still required |
+| Conciseness | 4 | The setup guide is lengthy because unknown latch state, credentials and forced-off risks require explicit handling |
+
+Highest-impact follow-ups: (1) compile both ESP-IDF CI variants; (2) measure
+STATE and validate sleep/wake and pulse timing on the board; (3) install and test
+the Linux lifecycle hooks on the actual distribution. These are outstanding
+validation steps, not results inferred from passing mocks. The user should see
+the same distinction between “implemented” and “ready to operate” in delivery.
