@@ -5,12 +5,14 @@
 
 #include "usb_serial_comm.h"
 #include "../storage/hw_identity.h"
+#include "sdkconfig.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/usb_serial_jtag.h"
+#include "driver/uart.h"
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_task_wdt.h"
@@ -25,6 +27,25 @@ static pc_stats_t s_pc_stats = {0};
 static volatile uint32_t s_last_data_ms = 0;
 static SemaphoreHandle_t s_stats_mutex = NULL;
 static uint32_t s_stats_mutex_timeouts = 0;
+static SemaphoreHandle_t s_tx_mutex;
+
+static int transport_read(uint8_t *data, size_t size, TickType_t timeout)
+{
+#if CONFIG_SCARAB_UART_BRIDGE
+    return uart_read_bytes(UART_NUM_0, data, size, timeout);
+#else
+    return usb_serial_jtag_read_bytes(data, size, timeout);
+#endif
+}
+
+static int transport_write(const char *data, size_t size)
+{
+#if CONFIG_SCARAB_UART_BRIDGE
+    return uart_write_bytes(UART_NUM_0, data, size);
+#else
+    return usb_serial_jtag_write_bytes((const uint8_t *)data, size, pdMS_TO_TICKS(100));
+#endif
+}
 
 /* Command handlers (max 8) */
 #define MAX_CMD_HANDLERS 8
@@ -37,6 +58,22 @@ static int s_handler_count = 0;
 
 esp_err_t usb_serial_init(void)
 {
+    s_tx_mutex = xSemaphoreCreateMutex();
+    if (!s_tx_mutex) return ESP_ERR_NO_MEM;
+#if CONFIG_SCARAB_UART_BRIDGE
+    /* Waveshare USB-C -> CH343 -> UART0, not native ESP32 USB GPIO19/20.
+     * sdkconfig disables the UART console so logs cannot corrupt these frames. */
+    uart_config_t config = {
+        .baud_rate = 115200, .data_bits = UART_DATA_8_BITS,
+        .parity = UART_PARITY_DISABLE, .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE, .source_clk = UART_SCLK_DEFAULT
+    };
+    esp_err_t ret = uart_param_config(UART_NUM_0, &config);
+    if (ret != ESP_OK) return ret;
+    ret = uart_set_pin(UART_NUM_0, 43, 44, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    if (ret != ESP_OK) return ret;
+    return uart_driver_install(UART_NUM_0, USB_RX_BUFFER_SIZE, USB_TX_BUFFER_SIZE, 0, NULL, 0);
+#else
     usb_serial_jtag_driver_config_t usb_cfg = {
         .rx_buffer_size = USB_RX_BUFFER_SIZE,
         .tx_buffer_size = USB_TX_BUFFER_SIZE
@@ -50,6 +87,7 @@ esp_err_t usb_serial_init(void)
     }
 
     return ret;
+#endif
 }
 
 /* =============================================================================
@@ -79,9 +117,10 @@ void usb_serial_register_handler(usb_cmd_handler_t handler)
 
 void usb_serial_send(const char *response)
 {
-    if (response) {
+    if (response && s_tx_mutex && xSemaphoreTake(s_tx_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         size_t len = strlen(response);
-        usb_serial_jtag_write_bytes((const uint8_t *)response, len, pdMS_TO_TICKS(100));
+        transport_write(response, len);
+        xSemaphoreGive(s_tx_mutex);
     }
 }
 
@@ -94,7 +133,8 @@ void usb_serial_sendf(const char *fmt, ...)
     va_end(args);
 
     if (len > 0) {
-        usb_serial_jtag_write_bytes((const uint8_t *)buf, len, pdMS_TO_TICKS(100));
+        /* vsnprintf returns the UNTRUNCATED length; never read beyond buf. */
+        usb_serial_send(buf);
     }
 }
 
@@ -226,7 +266,7 @@ static void usb_rx_task(void *arg)
         /* Feed the watchdog at start of each iteration */
         esp_task_wdt_reset();
         /* Read with timeout so other tasks can run */
-        int len = usb_serial_jtag_read_bytes(rx_buf, sizeof(rx_buf), pdMS_TO_TICKS(10));
+        int len = transport_read(rx_buf, sizeof(rx_buf), pdMS_TO_TICKS(10));
 
         if (len > 0) {
             for (int i = 0; i < len; i++) {

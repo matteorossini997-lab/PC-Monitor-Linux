@@ -4,6 +4,13 @@
 
 Real-time visualization of PC hardware metrics on 4 round GC9A01 displays, powered by ESP32-S3.
 
+> **BC250 / Waveshare integration:** the current firmware also includes a
+> fail-safe power controller, Linux lifecycle hooks and authenticated LAN HTTPS
+> control. The hardware/defaults for this integration target the single-display
+> Waveshare ESP32-S3-LCD-1.28 (S3R2, 2 MB Quad PSRAM), not the original 4-display
+> DevKit wiring below. See **[BC250 setup, safety limits and tests](docs/BC250_POWER.md)**
+> before connecting power-control GPIOs or flashing.
+
 ![Scarab Monitor (Development Prototype)](https://github.com/user-attachments/assets/937ad4dd-c676-4e93-8e60-af66cce4760b)
 Scarab Monitor (Development Prototype) - Running on ESP32-S3 with GC9A01 Circular Display via USB Serial.
 ---

@@ -204,6 +204,10 @@ def connect_scarab():
     return None
 
 def main():
+    if "--power-control" in sys.argv:
+        from power_agent import main as power_main
+        power_main([arg for arg in sys.argv[1:] if arg != "--power-control"])
+        return
     test_mode = "--test" in sys.argv
     monitor = HardwareMonitor()
     psutil.cpu_percent(interval=None)

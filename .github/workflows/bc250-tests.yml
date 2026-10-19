@@ -1,0 +1,59 @@
+name: BC250 power control
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install 'coverage>=7.10,<8' 'pyserial==3.5'
+      - name: Native controller and Linux pseudo-terminal tests (no hardware actions)
+        run: |
+          cc -std=c11 -Wall -Wextra -Werror -Imain/power tests/test_power_fsm.c main/power/power_fsm.c -o /tmp/bc250-tests
+          /tmp/bc250-tests
+          cc -std=c11 -Wall -Wextra -Werror -Imain/power tests/test_power_security.c main/power/power_security.c -o /tmp/bc250-security-tests
+          /tmp/bc250-security-tests
+          PYTHONPATH=linux_client python -m coverage run --branch --source=power_agent,power_event,power_protocol -m unittest discover -s tests -v
+          python -m coverage report --fail-under=80
+
+  firmware:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v5.4.3
+    strategy:
+      matrix:
+        network: [disabled, https]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare synthetic build-only Wi-Fi configuration
+        if: matrix.network == 'https'
+        shell: bash
+        run: |
+          python3 tools/generate_bc250_local.py --ip 192.168.1.250
+          python3 - <<'PY'
+          from pathlib import Path
+          token = Path('local/api-token').read_text().strip()
+          Path('sdkconfig.ci').write_text(
+              'CONFIG_BC250_WIFI=y\n'
+              'CONFIG_BC250_WIFI_SSID="ci-not-a-real-network"\n'
+              'CONFIG_BC250_WIFI_PASSWORD="ci-not-a-real-password"\n'
+              f'CONFIG_BC250_API_TOKEN="{token}"\n')
+          PY
+      - name: Build ESP32-S3R2 firmware
+        shell: bash
+        env:
+          BC250_NETWORK: ${{ matrix.network }}
+        run: |
+          . "$IDF_PATH/export.sh"
+          defaults=sdkconfig.defaults
+          if [ "$BC250_NETWORK" = https ]; then defaults='sdkconfig.defaults;sdkconfig.ci'; fi
+          idf.py -DIDF_TARGET=esp32s3 -DSDKCONFIG_DEFAULTS="$defaults" build

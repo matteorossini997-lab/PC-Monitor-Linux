@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="it">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BC250 — controllo alimentazione</title>
+<style>
+body{font:18px system-ui;max-width:42rem;margin:3rem auto;padding:0 1rem;background:#121820;color:#eef}
+input,button{font:inherit;padding:.7rem;margin:.3rem;border-radius:.4rem}input{max-width:90%}
+button{cursor:pointer}pre{white-space:pre-wrap}small{color:#bdc9d9}
+</style>
+<h1>BC250</h1>
+<p>Controllo locale HTTPS. Il token rimane solo nella memoria di questa pagina.</p>
+<label>Token API <input id="token" type="password" autocomplete="off" spellcheck="false"></label>
+<button id="connect">Leggi stato</button>
+<pre id="state">Non autenticato.</pre>
+<div>
+<button data-action="start">Accendi</button>
+<button data-action="stop">Shutdown pulito</button>
+<button data-action="sleep">Sleep</button>
+<button data-action="wake">Risveglia</button>
+</div>
+<p id="message" role="status"></p>
+<details><summary>Risincronizzazione iniziale</summary>
+<p>Solo se lo stato è sconosciuto e hai verificato fisicamente che le rail ATX
+principali siano spente. Il solo segnale STATE basso non basta.</p>
+<button id="confirm-off">Conferma ATX già spento</button></details>
+<p><small>Pressione breve del pulsante fisico: shutdown pulito; in sleep: risveglio.
+Pressione lunga: spegnimento forzato, con possibile perdita dati.
+La rete o l'USB assenti non provocano il taglio ATX.</small></p>
+<script>
+const token=document.getElementById('token'), state=document.getElementById('state');
+const message=document.getElementById('message');
+async function request(path, method='GET') {
+  if(!/^[0-9a-fA-F]{64}$/.test(token.value)) throw Error('Inserisci il token API di 64 caratteri esadecimali.');
+  const response=await fetch('/api/'+path,{method,headers:{Authorization:'Bearer '+token.value},cache:'no-store'});
+  const data=await response.json();
+  if(!response.ok) throw Error(data.error || 'Richiesta rifiutata');
+  return data;
+}
+async function refresh(){try{state.textContent=JSON.stringify(await request('status'),null,2);}
+catch(error){message.textContent=error.message;}}
+async function action(name){try{await request(name,'POST');message.textContent='Richiesta accodata: verifica lo stato e last_error.';await refresh();}
+catch(error){message.textContent=error.message;}}
+document.getElementById('connect').onclick=refresh;
+document.querySelectorAll('[data-action]').forEach(button=>button.onclick=()=>action(button.dataset.action));
+document.getElementById('confirm-off').onclick=()=>{
+  if(confirm('Hai MISURATO o verificato fisicamente che le rail ATX principali siano spente? Non confermare se il PC è in sleep.')) action('confirm-off');
+};
+setInterval(()=>{if(token.value && !document.hidden)refresh();},3000);
+</script>
+</html>

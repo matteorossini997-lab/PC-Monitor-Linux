@@ -52,6 +52,8 @@
 #include "ui/ui_manager.h"
 #include "ui/screensaver_mgr.h"
 #include "screens/screens_lvgl.h"
+#include "power/power_controller.h"
+#include "power/power_network.h"
 
 static const char *TAG = "MAIN";
 
@@ -110,7 +112,7 @@ static ui_screens_t s_screens = {0};
 static ui_screensavers_t s_screensavers = {0};
 static ui_status_dots_t s_dots = {0};
 
-/* SPI Pin Configurations (Waveshare ESP32-S3-Touch-LCD-1.28) */
+/* SPI Pin Configurations (Waveshare ESP32-S3-LCD-1.28) */
 static const lvgl_gc9a01_config_t config_main = {
     .pin_sck = 10, .pin_mosi = 11, .pin_cs = 9,
     .pin_dc = 8, .pin_rst = 12, .spi_host = SPI2_HOST
@@ -259,6 +261,8 @@ static void lvgl_timer_task(void *arg)
  * ========================================================================== */
 void app_main(void)
 {
+    /* Power safety does not depend on the UI, SPI, storage or Wi-Fi starting. */
+    ESP_ERROR_CHECK(bc250_power_init());
     ESP_LOGI(TAG, "===========================================");
     ESP_LOGI(TAG, "PC Monitor - Desert-Spec v2.3");
     ESP_LOGI(TAG, "===========================================");
@@ -292,13 +296,20 @@ void app_main(void)
     }
 
     /* Initialize USB Serial */
-    usb_serial_init();
+    ESP_ERROR_CHECK(usb_serial_init());
 
     /* Register command handlers */
     usb_serial_register_handler(hw_identity_handle_command);
     usb_serial_register_handler(ui_manager_handle_color_command);
     usb_serial_register_handler(ss_image_handle_command);
     usb_serial_register_handler(gui_settings_handle_command);
+    usb_serial_register_handler(bc250_power_handle_serial);
+
+    esp_err_t network_result = bc250_network_start();
+    if (network_result != ESP_OK) {
+        usb_serial_send("PWR_ERROR:NETWORK_CONFIGURATION\n");
+        ESP_LOGE(TAG, "LAN control unavailable: %s", esp_err_to_name(network_result));
+    }
 
     /* Set theme callback for gui_settings (SET_SS_BG command) */
     gui_settings_set_theme_callback(theme_update_callback);

@@ -1,11 +1,12 @@
 # ============================================================================
-# PC Monitor - LVGL Configuration for ESP32-S3 N16R8 with PSRAM
+# PC Monitor - Waveshare ESP32-S3-LCD-1.28 (ESP32-S3R2, 2MB PSRAM)
 # ============================================================================
 
-# ESP32-S3 with Octal PSRAM (8MB)
+# ESP32-S3R2 has Quad PSRAM, not the original DevKit's Octal PSRAM.
 CONFIG_IDF_TARGET="esp32s3"
 CONFIG_ESP32S3_SPIRAM_SUPPORT=y
-CONFIG_SPIRAM_MODE_OCT=y
+# CONFIG_SPIRAM_MODE_OCT is not set
+CONFIG_SPIRAM_MODE_QUAD=y
 CONFIG_SPIRAM=y
 
 # PSRAM Configuration
@@ -33,9 +34,11 @@ CONFIG_SPI_MASTER_ISR_IN_IRAM=y
 CONFIG_LOG_DEFAULT_LEVEL_INFO=y
 CONFIG_LOG_MAXIMUM_LEVEL_INFO=y
 
-# Console output to UART0 for Wokwi debugging
-CONFIG_ESP_CONSOLE_UART_DEFAULT=y
+# UART0 carries framed CH343 protocol data. Do not interleave ESP-IDF log output.
+# CONFIG_ESP_CONSOLE_UART_DEFAULT is not set
+CONFIG_ESP_CONSOLE_NONE=y
 # CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG is not set
+CONFIG_SCARAB_UART_BRIDGE=y
 
 # Partition Table (Custom: 4MB factory + LittleFS storage)
 CONFIG_PARTITION_TABLE_CUSTOM=y

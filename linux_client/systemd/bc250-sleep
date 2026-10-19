@@ -1,0 +1,8 @@
+#!/bin/sh
+# Installed in /usr/lib/systemd/system-sleep/; notifications are best effort.
+case "$1" in
+    pre) event=SUSPENDING ;;
+    post) event=RESUMED ;;
+    *) exit 0 ;;
+esac
+/opt/pc-monitor/.venv/bin/python /opt/pc-monitor/linux_client/power_event.py "$event" || :

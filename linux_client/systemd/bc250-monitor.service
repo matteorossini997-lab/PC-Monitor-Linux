@@ -1,0 +1,32 @@
+[Unit]
+Description=BC250 power lifecycle bridge and Scarab telemetry
+After=local-fs.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/bc250-power.conf
+ExecStart=/opt/pc-monitor/.venv/bin/python /opt/pc-monitor/linux_client/power_agent.py --port ${BC250_SERIAL}
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=5
+RuntimeDirectory=bc250-monitor
+RuntimeDirectoryMode=0700
+UMask=0077
+# Root is needed for system power actions; the agent exposes only an allowlisted
+# local Unix socket and never listens on TCP. Keep the installation root-owned.
+User=root
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+ReadWritePaths=/run/bc250-monitor
+
+[Install]
+WantedBy=multi-user.target

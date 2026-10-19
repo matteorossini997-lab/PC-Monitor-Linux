@@ -33,3 +33,84 @@ menu "PC Monitor Configuration"
     endchoice
 
 endmenu
+
+menu "BC250 power controller"
+
+config BC250_ENABLE
+    bool "Enable BC250 power controller (Waveshare wiring)"
+    default y
+
+if BC250_ENABLE
+
+config BC250_BUTTON_GPIO
+    int "J3.3 ESP_BTN_SENSE GPIO (active low)"
+    default 15
+    range 0 48
+
+config BC250_LATCH_GPIO
+    int "J3.4 ESP_POWER_REQ GPIO (active high pulse)"
+    default 16
+    range 0 48
+
+config BC250_STATE_GPIO
+    int "J3.5 ESP_STATE GPIO (3.3 V input)"
+    default 17
+    range 0 48
+
+config BC250_BOARD_BUTTON_GPIO
+    int "J3.6 ESP_BC250_BTN_REQ GPIO (active high pulse)"
+    default 18
+    range 0 48
+
+config BC250_LONG_PRESS_MS
+    int "Forced power-off hold time (ms; data loss possible)"
+    default 8000
+    range 5000 30000
+
+config BC250_BOOT_BUTTON_DELAY_MS
+    int "Wait after ATX enable before optional BC250 POWER pulse (ms)"
+    default 2000
+    range 1000 30000
+
+config BC250_WIFI
+    bool "Enable authenticated LAN HTTPS control"
+    depends on ESP_TLS_USING_MBEDTLS && MBEDTLS_TLS_SERVER
+    select ESP_HTTPS_SERVER_ENABLE
+    default n
+    help
+        Requires locally generated TLS certificate/key and a random API token.
+        No access point, cloud service or unauthenticated HTTP fallback is used.
+
+if BC250_WIFI
+
+config BC250_WIFI_SSID
+    string "Home Wi-Fi SSID (2.4 GHz)"
+    default ""
+
+config BC250_WIFI_PASSWORD
+    string "Home Wi-Fi password (keep sdkconfig private)"
+    default ""
+
+config BC250_API_TOKEN
+    string "API token (64 random hexadecimal characters)"
+    default ""
+
+config BC250_TLS_DIRECTORY
+    string "Local TLS directory relative to project root"
+    default "local/tls"
+    help
+        Must contain servercert.pem and prvtkey.pem. Never commit these files
+        or share sdkconfig/build binaries containing your credentials.
+
+endif
+endif
+endmenu
+
+menu "Scarab serial transport"
+config SCARAB_UART_BRIDGE
+    bool "Use Waveshare CH343 UART0 instead of native USB Serial/JTAG"
+    default y
+    help
+        Waveshare ESP32-S3-LCD-1.28 USB-C connects to CH343 then GPIO43/44.
+        Disable only on hardware actually wired to native USB GPIO19/20.
+endmenu

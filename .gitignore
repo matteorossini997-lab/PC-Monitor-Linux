@@ -120,6 +120,13 @@ credentials.*
 .env.local
 .env.*.local
 wifi_config.h
+local/
+*.gcda
+*.gcno
+*.gcov
+.coverage
+core
+core.*
 
 # =============================================================================
 # Temporary Files
