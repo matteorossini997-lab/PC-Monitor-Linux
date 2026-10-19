@@ -122,6 +122,13 @@ incompatibile con lo stato viene rifiutata dal controller, senza impulsi.
 `atx_expected_on` è una stima logica, **non una misura delle rail**.
 `/api/confirm-off` è riservato alla conferma fisica descritta sopra.
 
+Durante `suspending` non vengono generati impulsi di risveglio: Linux potrebbe
+essere ancora attivo. Il risveglio hardware richiede l'hook pre-suspend ricevuto
+e STATE LOW stabile; se STATE rimane HIGH anche in sleep, il firmware non può
+certificare questo percorso con i dati attuali e rifiuta l'impulso. Occorre prima
+misurare/integrare un segnale di sleep affidabile o usare un mezzo di risveglio
+indipendente. STATE che torna HIGH blocca nuovi impulsi prima del resume Linux.
+
 **Non distribuire `sdkconfig`, chiavi, token o binari costruiti con le tue
 credenziali.** L'immagine firmware contiene i segreti di questa configurazione;
 flash encryption/secure boot non sono configurati da questa integrazione.

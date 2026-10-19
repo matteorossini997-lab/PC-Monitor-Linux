@@ -11,10 +11,11 @@ Baseline repository commit: `d3a18f9f97ad66745648bf4a44c3993963299a54`.
 
 | Behavior | RED checkpoint and observed failure | GREEN guarantee |
 |---|---|---|
-| Power state policy | `7f05d04`: missing `power_fsm.h/.c` | 15 native state scenarios pass, including no ATX cut on signal/host loss, shutdown confirmation, sleep, button debounce and forced shutdown |
+| Power state policy | `7f05d04`: missing `power_fsm.h/.c` | 17 native state scenarios pass, including no ATX cut on signal/host loss, shutdown confirmation, sleep, button debounce and forced shutdown |
 | Linux lifecycle integration | `3bd4fe8`: missing `power_agent`, `power_event`, final hook source | Agent uses allowlisted argv, private socket and one serial owner; hook is tested on pseudo-terminals only |
 | Strict authentication/ACK parser | `313d778`: missing `power_security.h/.c` | Bearer token validation, constant-work secret comparison and bounded ACK parsing pass native tests |
 | Contradictory STATE safety | `3cbc86c`: assertion `!bc_power_command(...BC_CMD_START...)` failed with raw STATE HIGH | Start is rejected rather than toggling a latch believed OFF when STATE contradicts it |
+| Pending-sleep safety | `8ffe98e`: premature WAKE was accepted after SLEEP, before the suspend hook | No POWER impulse until OS suspend announcement and stable LOW STATE; rising STATE also prevents another wake pulse |
 
 The initial sleep-cancellation test was refined: an ordinary heartbeat must not
 cancel pending suspend, whereas an explicit RESUMED notification does. This is an
@@ -46,12 +47,12 @@ PYTHONPATH=linux_client /tmp/opencode/bc250-test-venv/bin/python -m coverage run
 
 | Tested module | Coverage |
 |---|---:|
-| `power_fsm.c` | 99.37% lines |
+| `power_fsm.c` | 100% lines (163/163 after sleep guard) |
 | `power_security.c` | 100% lines |
 | `power_protocol.py` | 100% combined statements/branches |
 | `power_agent.py` | 93% combined statements/branches after refactor |
 | `power_event.py` | 86% combined statements/branches |
-| Python total | 94% rounded (93.93% exact after refactor) |
+| Python total | 94% rounded |
 
 TLS generation was smoke-tested in a temporary copy: key/token permissions,
 certificate SAN, matching key/certificate, valid private LAN address, refusal to
@@ -65,7 +66,9 @@ this path was inspected, not verified with an ESP-IDF build.
 Full local logs and exit codes are outside the repository in
 `/home/user/kicad-workspace/verification/software-final/`; post-refactor logs are
 in adjacent `software-final-refactor/`; earlier RED logs are
-under adjacent `software-red*` directories. Checkpoint history preserves the
+under adjacent `software-red*` directories. The final 17-scenario run, coverage
+and lint results after the pending-sleep fix are in `software-final-sleep-guard/`.
+Checkpoint history preserves the
 RED stages above; do not interpret those intermediate commits as release builds.
 
 ## Not established by these tests

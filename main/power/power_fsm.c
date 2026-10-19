@@ -81,12 +81,15 @@ bool bc_power_command(bc_power_t *p, bc_command_t cmd, uint64_t now)
         if (p->state == BC_SUSPENDING || p->state == BC_SLEEPING) return true;
         if (p->state != BC_RUNNING || !p->latch_on) return false;
         p->off_confirmed = false;
+        p->suspend_announced = false;
         p->pending |= BC_EFFECT_REQUEST_SLEEP;
         transition(p, BC_SUSPENDING, now);
         return true;
     case BC_CMD_WAKE:
         if (p->state == BC_RUNNING || p->state == BC_WAKING) return true;
-        if ((p->state != BC_SLEEPING && p->state != BC_SUSPENDING) || !p->latch_on)
+        /* Pending suspend is not permission to press POWER on a running PC.
+         * Rising STATE may also indicate a resume before its serial hook arrives. */
+        if (p->state != BC_SLEEPING || !p->latch_on || p->raw_state || p->state_high)
             return false;
         p->pending |= BC_EFFECT_BOARD_BUTTON;
         transition(p, BC_WAKING, now);
@@ -110,6 +113,7 @@ void bc_power_os_event(bc_power_t *p, bc_os_event_t event, uint64_t now)
     switch (event) {
     case BC_OS_RUNNING:
     case BC_OS_RESUMED:
+        if (event == BC_OS_RESUMED) p->suspend_announced = false;
         if (p->stop_after_wake) {
             p->stop_after_wake = false;
             transition(p, BC_STOPPING, now);
@@ -122,6 +126,7 @@ void bc_power_os_event(bc_power_t *p, bc_os_event_t event, uint64_t now)
         }
         break;
     case BC_OS_SUSPENDING:
+        p->suspend_announced = true;
         p->stop_after_wake = false;
         transition(p, BC_SUSPENDING, now);
         break;
@@ -191,7 +196,8 @@ uint32_t bc_power_step(bc_power_t *p, uint64_t now, bool state_high, bool button
         }
         if (now - p->state_changed >= BOOT_TIMEOUT_MS) transition(p, BC_UNKNOWN, now);
     }
-    if (p->state == BC_SUSPENDING && !p->state_high) transition(p, BC_SLEEPING, now);
+    if (p->state == BC_SUSPENDING && p->suspend_announced &&
+        !p->raw_state && !p->state_high) transition(p, BC_SLEEPING, now);
     if (p->off_confirmed && !p->raw_state && !p->state_high &&
         now - p->low_since >= OFF_STABLE_MS && now - p->confirmed_at >= OFF_STABLE_MS &&
         now >= p->latch_busy_until) power_off(p, now);

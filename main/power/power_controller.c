@@ -118,7 +118,11 @@ static void control_task(void *arg)
             if (message.type == MESSAGE_COMMAND) {
                 bool contradictory_start = message.value == BC_CMD_START &&
                     power.state == BC_OFF && gpio_get_level(CONFIG_BC250_STATE_GPIO);
-                bool accepted = !contradictory_start && bc_power_command(&power, message.value, now);
+                bool contradictory_wake = power.state == BC_SLEEPING &&
+                    (message.value == BC_CMD_WAKE || message.value == BC_CMD_START ||
+                     message.value == BC_CMD_STOP) && gpio_get_level(CONFIG_BC250_STATE_GPIO);
+                bool accepted = !contradictory_start && !contradictory_wake &&
+                    bc_power_command(&power, message.value, now);
                 last_error = accepted ? "none" : "command_rejected";
                 usb_serial_send(accepted ? "PWR_RESULT:OK\n" : "PWR_RESULT:REJECTED\n");
             } else if (message.type == MESSAGE_OS) {

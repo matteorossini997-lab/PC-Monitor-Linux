@@ -31,6 +31,7 @@ typedef struct {
     bool latch_known, latch_on, state_high, raw_state;
     bool raw_button, button, button_armed, button_active, long_sent;
     bool board_button_sent, stop_after_wake, off_confirmed;
+    bool suspend_announced;
     uint64_t state_changed, raw_state_changed, low_since;
     uint64_t raw_button_changed, button_down, confirmed_at, latch_busy_until;
     uint32_t pending;
