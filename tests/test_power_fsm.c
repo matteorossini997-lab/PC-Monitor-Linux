@@ -216,6 +216,41 @@ static void test_stop_timeout_and_sleep_cancel_never_cut(void)
     assert(!bc_power_command(&p, BC_CMD_CONFIRM_OFF, 130004));
 }
 
+static void test_pending_suspend_is_not_permission_to_pulse_power(void)
+{
+    init_running();
+    assert(bc_power_command(&p, BC_CMD_SLEEP, 500));
+    assert(bc_power_step(&p, 500, true, false) == BC_EFFECT_REQUEST_SLEEP);
+    assert(!bc_power_command(&p, BC_CMD_WAKE, 501));
+    assert(!bc_power_command(&p, BC_CMD_STOP, 502));
+    assert(!bc_power_command(&p, BC_CMD_START, 503));
+    /* A low pin without the OS suspend hook still is not proof of sleep. */
+    bc_power_step(&p, 1000, false, false);
+    assert(bc_power_step(&p, 1400, false, false) == 0);
+    assert(p.state == BC_SUSPENDING);
+    assert(!bc_power_command(&p, BC_CMD_WAKE, 1401));
+    bc_power_os_event(&p, BC_OS_SUSPENDING, 1500);
+    assert(bc_power_step(&p, 1501, false, false) == 0);
+    assert(p.state == BC_SLEEPING);
+    assert(bc_power_command(&p, BC_CMD_WAKE, 1502));
+    assert(bc_power_step(&p, 1502, false, false) == BC_EFFECT_BOARD_BUTTON);
+}
+
+static void test_rising_state_blocks_wake_before_resume_notification(void)
+{
+    init_running();
+    bc_power_os_event(&p, BC_OS_SUSPENDING, 500);
+    bc_power_step(&p, 600, false, false);
+    bc_power_step(&p, 1000, false, false);
+    assert(p.state == BC_SLEEPING);
+    bc_power_step(&p, 1100, true, false);
+    assert(!bc_power_command(&p, BC_CMD_WAKE, 1101));
+    assert(!bc_power_command(&p, BC_CMD_STOP, 1102));
+    assert(bc_power_step(&p, 1400, true, false) == 0);
+    bc_power_os_event(&p, BC_OS_RESUMED, 1500);
+    assert(p.state == BC_RUNNING && p.latch_on);
+}
+
 int main(void)
 {
     test_unknown_is_not_off();
@@ -233,8 +268,10 @@ int main(void)
     test_timeouts_and_rejections_are_fail_safe();
     test_start_refuses_state_that_contradicts_confirmed_off();
     test_stop_timeout_and_sleep_cancel_never_cut();
+    test_pending_suspend_is_not_permission_to_pulse_power();
+    test_rising_state_blocks_wake_before_resume_notification();
     assert(bc_power_state_name(BC_OFF)[0] == 'o');
     assert(bc_power_state_name((bc_state_t)99)[0] == 'u');
-    puts("PASS: 15 BC250 power-state scenarios; no real hardware actions");
+    puts("PASS: 17 BC250 power-state scenarios; no real hardware actions");
     return 0;
 }
