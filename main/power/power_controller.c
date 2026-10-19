@@ -22,6 +22,7 @@ typedef struct { message_type_t type; int value; uint32_t id; } message_t;
 static QueueHandle_t s_queue;
 static SemaphoreHandle_t s_status_mutex;
 static char s_status[256] = "{\"state\":\"unknown\"}";
+static bc_power_snapshot_t s_snapshot = { .state = BC_UNKNOWN };
 
 static uint64_t now_ms(void) { return (uint64_t)esp_timer_get_time() / 1000; }
 
@@ -51,6 +52,15 @@ bool bc250_power_status_json(char *buffer, size_t size)
     int n = snprintf(buffer, size, "%s", s_status);
     xSemaphoreGive(s_status_mutex);
     return n >= 0 && (size_t)n < size;
+}
+
+bool bc250_power_snapshot(bc_power_snapshot_t *snapshot)
+{
+    if (!snapshot || !s_status_mutex ||
+        xSemaphoreTake(s_status_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return false;
+    *snapshot = s_snapshot;
+    xSemaphoreGive(s_status_mutex);
+    return true;
 }
 
 bool bc250_power_handle_serial(const char *line)
@@ -161,6 +171,7 @@ static void control_task(void *arg)
             last_error = "host_ack_timeout"; /* No fallback to hard power-off. */
         }
         if (xSemaphoreTake(s_status_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+            s_snapshot = (bc_power_snapshot_t){ power.state, power.state_changed };
             snprintf(s_status, sizeof(s_status),
                 "{\"state\":\"%s\",\"latch_known\":%s,\"atx_expected_on\":%s,"
                 "\"state_pin_high\":%s,\"last_error\":\"%s\"}",
@@ -207,4 +218,5 @@ esp_err_t bc250_power_init(void) { return ESP_OK; }
 bool bc250_power_submit(bc_command_t command) { (void)command; return false; }
 bool bc250_power_handle_serial(const char *line) { (void)line; return false; }
 bool bc250_power_status_json(char *buffer, size_t size) { (void)buffer; (void)size; return false; }
+bool bc250_power_snapshot(bc_power_snapshot_t *snapshot) { (void)snapshot; return false; }
 #endif

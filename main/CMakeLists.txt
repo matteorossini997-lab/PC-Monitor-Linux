@@ -19,6 +19,7 @@ idf_component_register(
         "lvgl_gc9a01_driver.c"
         "drivers/usb_serial_comm.c"
         "power/power_fsm.c"
+        "power/power_display.c"
         "power/power_security.c"
         "power/power_controller.c"
         "power/power_network.c"
@@ -30,6 +31,7 @@ idf_component_register(
 
         # UI modules
         "ui/ui_manager.c"
+        "ui/power_overlay.c"
         "ui/screensaver_mgr.c"
 
         # Screen implementations

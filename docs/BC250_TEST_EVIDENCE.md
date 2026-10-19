@@ -79,6 +79,9 @@ clean. No generated `sdkconfig` exists locally to retain an older override.
 
 ## Not established by these tests
 
+Display-specific RED/GREEN commands, coverage and rendering checks are recorded
+separately in [BC250_DISPLAY_TEST_EVIDENCE.md](BC250_DISPLAY_TEST_EVIDENCE.md).
+
 - **ESP-IDF firmware compilation was not run:** no ESP-IDF/toolchain installed.
   The added GitHub workflow is unexecuted locally and has not been pushed/run.
 - GPIO adapter, TLS server, Wi-Fi lifecycle, browser UI and display integration

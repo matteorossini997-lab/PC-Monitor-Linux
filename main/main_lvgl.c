@@ -51,6 +51,7 @@
 #include "screens/screen_split_ring.h"
 #include "ui/ui_manager.h"
 #include "ui/screensaver_mgr.h"
+#include "ui/power_overlay.h"
 #include "screens/screens_lvgl.h"
 #include "power/power_controller.h"
 #include "power/power_network.h"
@@ -111,6 +112,9 @@ static lvgl_gc9a01_handle_t display_main;
 static ui_screens_t s_screens = {0};
 static ui_screensavers_t s_screensavers = {0};
 static ui_status_dots_t s_dots = {0};
+static bc_power_overlay_t s_power_overlay;
+static bool s_display_blanked = false;
+static bool s_panel_blanked = false;
 
 /* SPI Pin Configurations (Waveshare ESP32-S3-LCD-1.28) */
 static const lvgl_gc9a01_config_t config_main = {
@@ -143,6 +147,42 @@ static void theme_update_callback(void)
     }
 }
 
+/* Called under the LVGL mutex, never from the GPIO/power task. Only the LCD
+ * and its backlight change: ESP32, UART, Wi-Fi and the power FSM stay alive. */
+static void display_set_blank(bool blank)
+{
+    if (blank == s_display_blanked && blank == s_panel_blanked) return;
+    esp_err_t result = ESP_OK;
+    if (blank) {
+        if (!s_display_blanked) {
+            result = gpio_set_level(40, 0);
+            if (result == ESP_OK) s_display_blanked = true;
+        }
+        if (result == ESP_OK && !s_panel_blanked) {
+            result = esp_lcd_panel_disp_on_off(display_main.panel_handle, false);
+            if (result == ESP_OK) s_panel_blanked = true;
+        }
+    } else {
+        if (s_panel_blanked) {
+            result = esp_lcd_panel_disp_on_off(display_main.panel_handle, true);
+            if (result == ESP_OK) s_panel_blanked = false;
+        }
+        if (result == ESP_OK && s_display_blanked) {
+            /* Render the new state before lighting the panel: no stale OFF flash. */
+            lv_obj_invalidate(lv_display_get_screen_active(display_main.lv_disp));
+            lv_obj_invalidate(lv_display_get_layer_top(display_main.lv_disp));
+            lv_refr_now(display_main.lv_disp);
+            result = gpio_set_level(40, 1);
+            if (result == ESP_OK) s_display_blanked = false;
+        }
+    }
+    if (result == ESP_OK) {
+        ESP_LOGI(TAG, "LCD/backlight %s (ESP32 remains active)", blank ? "OFF" : "ON");
+    } else {
+        ESP_LOGW(TAG, "LCD power update failed: %s; will retry", esp_err_to_name(result));
+    }
+}
+
 /* =============================================================================
  * TASK: Display Update - 10 FPS with Screensaver Logic
  * ========================================================================== */
@@ -153,11 +193,18 @@ static void display_update_task(void *arg)
     /* Subscribe to Task Watchdog */
     esp_task_wdt_add(NULL);
 
+    bc_power_snapshot_t power = { .state = BC_UNKNOWN };
+
     while (1) {
         /* Feed the watchdog at start of each iteration */
         esp_task_wdt_reset();
 
-        uint32_t now = (uint32_t)(esp_timer_get_time() / 1000);
+        /* Failed/disabled snapshot reads retain the last known view, not a fake
+         * OFF or wake. Never take the status mutex while holding the LVGL one. */
+        (void)bc250_power_snapshot(&power);
+        uint64_t now64 = (uint64_t)esp_timer_get_time() / 1000;
+        uint32_t now = (uint32_t)now64;
+        bc_display_mode_t mode = bc_display_mode(power.state, power.state_changed_ms, now64);
         uint32_t last_data = usb_serial_get_last_data_time();
         uint32_t time_since_data = now - last_data;
 
@@ -170,6 +217,18 @@ static void display_update_task(void *arg)
             /* Process pending image reloads from USB task (Thread-Safety Fix)
              * This MUST be done in the UI thread to avoid race conditions */
             ss_process_updates();
+
+            bc_power_overlay_update(&s_power_overlay, mode, power.state_changed_ms, now64);
+            if (mode != BC_DISPLAY_TELEMETRY) {
+                /* Power/sleep states override stale-data screensavers. */
+                ui_manager_set_screensaver_active(false);
+                ui_manager_show_screensavers(false);
+                ui_manager_show_status_dots(false);
+                display_set_blank(mode == BC_DISPLAY_BLANK);
+                xSemaphoreGive(s_lvgl_mutex);
+                vTaskDelay(pdMS_TO_TICKS(DISPLAY_UPDATE_MS));
+                continue;
+            }
 
             /* Screensaver logic */
             if (should_screensave && !ui_manager_is_screensaver_active()) {
@@ -204,6 +263,7 @@ static void display_update_task(void *arg)
                 }
             }
 
+            display_set_blank(false);
             xSemaphoreGive(s_lvgl_mutex);
         } else {
             /* Fail-safe: LVGL mutex timeout - skip this frame */
@@ -318,7 +378,7 @@ void app_main(void)
     ESP_LOGI(TAG, "Turning on Backlight (GPIO 40)...");
     gpio_reset_pin(40);
     gpio_set_direction(40, GPIO_MODE_OUTPUT);
-    gpio_set_level(40, 1);
+    gpio_set_level(40, 0); /* Do not show uninitialised panel memory. */
 
     /* Initialize UI manager */
     ui_manager_init(s_lvgl_mutex);
@@ -354,7 +414,7 @@ void app_main(void)
 
     /* Display 1: Main Unified Screen & Split Ring Screen */
     ESP_LOGI(TAG, "Initializing Main display...");
-    lvgl_gc9a01_init(&config_main, &display_main);
+    ESP_ERROR_CHECK(lvgl_gc9a01_init(&config_main, &display_main));
     lvgl_gc9a01_set_rotation(&display_main, DISPLAY_ROTATION_DEG);
     
     lv_display_t *disp = lvgl_gc9a01_get_display(&display_main);
@@ -380,6 +440,10 @@ void app_main(void)
 
     /* Apply loaded theme and active screen */
     ui_manager_apply_theme();
+
+    bc_power_overlay_init(&s_power_overlay, disp);
+    lv_refr_now(disp);
+    gpio_set_level(40, 1);
 
     /* Register callback for screensaver image hot-swap (Thread-Safety Fix) */
     ss_set_reload_callback((ss_image_reload_cb_t)ui_manager_on_image_reload);

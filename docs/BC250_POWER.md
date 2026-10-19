@@ -32,6 +32,42 @@ shutdown prima di riconoscere una pressione lunga. Un tasto tenuto durante il
 boot dell'ESP32 è ignorato fino al primo rilascio. I comandi duplicati durante
 un'operazione non generano ulteriori impulsi di toggle.
 
+## Display Waveshare e animazione power-off
+
+| Stato noto al controller | Display |
+|---|---|
+| RUNNING | Monitor risorse esistente, senza sostituirne schermate o impostazioni |
+| STOPPING | Simbolo power arancione pulsante, anello animato e `SPEGNIMENTO...` |
+| OFF, primi 10 s | `POWER OFF`, simbolo che sfuma e anello che si svuota |
+| OFF, dopo 10 s | Retroilluminazione GPIO40 LOW e comando display OFF al GC9A01 |
+| SUSPENDING | `SOSPENSIONE...`, non ancora `Zzzz` |
+| SLEEPING | `Zzzz` azzurro, respiro luminoso e lieve movimento verticale; schermo acceso |
+| STARTING / WAKING | Schermo riacceso con `AVVIO...` / `RISVEGLIO...`; ritorno alla telemetria in RUNNING |
+| UNKNOWN | Comportamento preesistente, incluso indicatore dati mancanti/screensaver; non inventa OFF o sleep |
+
+I dieci secondi sono misurati dall'ingresso in **BC_OFF**, non dal click STOP,
+dall'inizio dello shutdown o dall'ultima telemetria USB. Un arresto lento resta
+visibile; un arresto fallito non spegne il display per un semplice timeout.
+La stessa presentazione OFF segue un forced-off fisico o una conferma manuale
+di ATX fisicamente verificato spento. Con il task di aggiornamento a 10 Hz il
+comando di blank avviene normalmente entro circa 100 ms dalla scadenza, salvo
+contesa del mutex o errori del pannello (ritentati).
+
+**Si spegne solo lo schermo:** l'ESP32 resta alimentato da +5VSB, con controller,
+seriale e, se configurato, HTTPS attivi. Nessun deep sleep/reset dell'ESP32 e
+nessun comando ATX viene generato dall'interfaccia grafica. La riaccensione LCD
+ricarica la nuova vista prima di abilitare la retroilluminazione. Non toccare
+il tasto per riaccendere soltanto il display: il tasto mantiene il suo ruolo
+di controllo della BC250, non diventa un comando grafico separato.
+
+L'animazione è procedurale LVGL, senza GIF scaricate, nuovi asset o licenze
+esterne. L'overlay vive sul layer superiore, anche cambiando schermata normale /
+split-ring; ha precedenza sullo screensaver da assenza dati. `Zzzz` richiede lo
+stato SLEEPING già validato dal controller: **questa modifica non risolve il
+suspend nativo BC250 né implementa lo pseudo-sleep** descritto nelle fonti.
+La grafica e le policy sono testabili su host, ma i comandi LCD e il comportamento
+visivo sulla Waveshare richiedono ancora build ESP-IDF e collaudo fisico.
+
 ## Cablaggio da usare
 
 | PCB BC250 | Waveshare |
@@ -44,6 +80,12 @@ un'operazione non generano ulteriori impulsi di toggle.
 | J3.6 `ESP_BC250_BTN_REQ` | H1.11 GPIO18, impulso HIGH 250 ms |
 
 Il progetto indica J4.2 verso **TPMS1 pin 9**, non TPMS1 pin 14 `S_PWRDWN#`.
+Gli altri collegamenti lato BC250 sono **J4.1 verso il contatto segnale del
+pulsante POWER integrato** e **J4.3 verso GND BC250**, per esempio TPMS1 pin 17.
+Il [diagramma mosfet.party](https://mosfet.party/cdn/shop/files/power_button_input_3.png?v=1776056814&width=1946)
+indica il pad POWER nella vista inferiore del gruppo POWER/RESET: confrontare
+il layout della propria scheda prima di saldare. La sua alternativa CPU_FAN1
+usa 12 V e **non è collegabile direttamente al nostro J4.2/ESP_STATE**.
 Il LED 12 V del pulsante rimane cablato esternamente alla PCB, come nel progetto.
 Non collegare 5 V ai GPIO. Verificare alimentazioni simultanee VSYS/USB e possibili
 ritorni di corrente prima del cablaggio. Questa integrazione non cambia il PCB.

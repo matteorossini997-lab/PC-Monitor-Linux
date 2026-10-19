@@ -23,8 +23,26 @@ jobs:
           /tmp/bc250-tests
           cc -std=c11 -Wall -Wextra -Werror -Imain/power tests/test_power_security.c main/power/power_security.c -o /tmp/bc250-security-tests
           /tmp/bc250-security-tests
+          cc -std=c11 -Wall -Wextra -Werror -Imain/power tests/test_power_display.c main/power/power_display.c main/power/power_fsm.c -o /tmp/bc250-display-tests
+          /tmp/bc250-display-tests
           PYTHONPATH=linux_client python -m coverage run --branch --source=power_agent,power_event,power_protocol -m unittest discover -s tests -v
           python -m coverage report --fail-under=80
+
+  lvgl-overlay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: lvgl/lvgl
+          ref: 108e5aff3c90cc4d969331ed61aff2bbd365d430 # v9.3.0, same as firmware
+          path: .test-deps/lvgl
+      - name: Build real LVGL and test power overlay (no display hardware)
+        run: |
+          cmake -S .test-deps/lvgl -B /tmp/lvgl-build -DLV_CONF_PATH="$PWD/tests/lvgl/lv_conf.h" -DLV_BUILD_EXAMPLES=OFF -DLV_BUILD_DEMOS=OFF
+          cmake --build /tmp/lvgl-build --target lvgl -j2
+          cc -std=c11 -Wall -Wextra -Werror -Imain/power -Imain/ui -DLV_CONF_INCLUDE_SIMPLE -Itests/lvgl -I.test-deps/lvgl tests/test_power_overlay.c main/ui/power_overlay.c /tmp/lvgl-build/lib/liblvgl.a -lm -lpthread -o /tmp/bc250-overlay-tests
+          /tmp/bc250-overlay-tests
 
   firmware:
     runs-on: ubuntu-latest
