@@ -190,6 +190,14 @@ static void test_timeouts_and_rejections_are_fail_safe(void)
     assert(bc_power_step(&p, 100002, false, false) == BC_EFFECT_LATCH);
 }
 
+static void test_start_refuses_state_that_contradicts_confirmed_off(void)
+{
+    init_off();
+    bc_power_step(&p, 1000, true, false);
+    assert(!bc_power_command(&p, BC_CMD_START, 1001));
+    assert(bc_power_step(&p, 1400, true, false) == 0);
+}
+
 static void test_stop_timeout_and_sleep_cancel_never_cut(void)
 {
     init_running();
@@ -223,9 +231,10 @@ int main(void)
     test_long_press_forces_off_once_and_release_does_not_restart();
     test_boot_with_button_held_is_ignored_until_released();
     test_timeouts_and_rejections_are_fail_safe();
+    test_start_refuses_state_that_contradicts_confirmed_off();
     test_stop_timeout_and_sleep_cancel_never_cut();
     assert(bc_power_state_name(BC_OFF)[0] == 'o');
     assert(bc_power_state_name((bc_state_t)99)[0] == 'u');
-    puts("PASS: 14 BC250 power-state scenarios; no real hardware actions");
+    puts("PASS: 15 BC250 power-state scenarios; no real hardware actions");
     return 0;
 }
