@@ -5,6 +5,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "linux_client"))
 
 from power_protocol import LineDecoder, PowerProtocol
+from power_event import main as event_main
+from unittest.mock import patch
 
 
 class ProtocolTests(unittest.TestCase):
@@ -70,6 +72,17 @@ class ProtocolTests(unittest.TestCase):
         for i in range(200):
             self.protocol.handle(f"PWR_REQUEST:{i}:STOP")
         self.assertLessEqual(len(self.protocol.history), 64)
+
+    def test_lifecycle_cli_success_and_failure(self):
+        with patch("sys.argv", ["power_event", "RESUMED"]), \
+             patch("power_event.send_event") as send:
+            event_main()
+            send.assert_called_once_with("RESUMED", "/run/bc250-monitor/events.sock")
+        with patch("sys.argv", ["power_event", "RESUMED"]), \
+             patch("power_event.send_event", side_effect=OSError("not connected")):
+            with self.assertRaises(SystemExit) as error:
+                event_main()
+            self.assertEqual(error.exception.code, 1)
 
 
 if __name__ == "__main__":

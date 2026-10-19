@@ -16,6 +16,9 @@ static void init_running(void)
 {
     bc_power_init(&p, 0, true, false);
     assert(bc_power_step(&p, 400, true, false) == 0);
+    /* High STATE proves powered hardware, not an awake Linux kernel. */
+    assert(p.state == BC_UNKNOWN && p.latch_known && p.latch_on);
+    bc_power_os_event(&p, BC_OS_RUNNING, 401);
     assert(p.state == BC_RUNNING && p.latch_known && p.latch_on);
 }
 
@@ -92,6 +95,8 @@ static void test_sleep_never_cuts_atx_and_wake_is_idempotent(void)
     bc_power_step(&p, 800, false, false);
     assert(bc_power_step(&p, 1200, false, false) == 0);
     assert(p.state == BC_SLEEPING && p.latch_on);
+    bc_power_os_event(&p, BC_OS_RUNNING, 1300); /* Heartbeat already in flight. */
+    assert(p.state == BC_SLEEPING);
     assert(bc_power_step(&p, 100000, false, false) == 0);
     assert(bc_power_command(&p, BC_CMD_WAKE, 100100));
     assert(bc_power_command(&p, BC_CMD_WAKE, 100101));
@@ -159,6 +164,7 @@ static void test_long_press_forces_off_once_and_release_does_not_restart(void)
 static void test_boot_with_button_held_is_ignored_until_released(void)
 {
     bc_power_init(&p, 0, true, true);
+    bc_power_os_event(&p, BC_OS_RUNNING, 1);
     assert(bc_power_step(&p, 10000, true, true) == 0);
     assert(p.state == BC_RUNNING);
     bc_power_step(&p, 10100, true, false);
