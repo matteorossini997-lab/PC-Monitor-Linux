@@ -193,6 +193,9 @@ static void test_stop_timeout_and_sleep_cancel_never_cut(void)
     assert(p.latch_on);
     bc_power_os_event(&p, BC_OS_SUSPENDING, 130001);
     bc_power_os_event(&p, BC_OS_RUNNING, 130002);
+    /* A periodic heartbeat in flight must not cancel suspend intent. */
+    assert(p.state == BC_SUSPENDING);
+    bc_power_os_event(&p, BC_OS_RESUMED, 130003);
     assert(p.state == BC_RUNNING);
     assert(bc_power_command(&p, BC_CMD_WAKE, 130003));
     assert(bc_power_step(&p, 130003, true, false) == 0);
