@@ -39,6 +39,7 @@ push and has not been authorized/performed.
 
 ## GREEN results
 
+Implementation checkpoint: `560eb4e`, following RED `389f226` on the same branch.
 Executed locally using the real LVGL library described above:
 
 | Check | Result |
@@ -73,6 +74,16 @@ Optional ASAN/UBSAN links failed because the host lacks `libasan_preinit.o`,
 `libasan` and `libubsan`. The C/C++ build resolver reproduced the same error with
 an unrelated one-line program: environment blocker, no source fix applied.
 No sanitizer PASS is claimed; rerun on a host with those runtimes.
+
+The exact CI host-profile command was also reproduced locally. Its first
+configure failed because LVGL 9.3 expects `LV_BUILD_CONF_PATH`, not the cache
+variable `LV_CONF_PATH`. The C/C++ build resolver corrected the workflow to use
+`LV_BUILD_CONF_PATH` and `CONFIG_LV_BUILD_EXAMPLES/DEMOS=OFF`. A fresh executor
+run then passed configure, LVGL library build, strict overlay build/run,
+display-policy tests, YAML parsing and whitespace checks, with no unused-cache
+warning. Logs: adjacent `software-display-ci-profile/` (initial failure) and
+`software-display-ci-final/` (corrected GREEN). This validates the commands
+locally, **not** a remote GitHub Actions run or an ESP-IDF target build.
 
 ## Test specification
 
