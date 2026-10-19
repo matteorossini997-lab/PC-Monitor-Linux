@@ -1,12 +1,15 @@
 [Unit]
 Description=BC250 power lifecycle bridge and Scarab telemetry
 After=local-fs.target
+# Keep retrying after repeated startup failures; no permanently failed boot.
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 EnvironmentFile=/etc/bc250-power.conf
 ExecStart=/opt/pc-monitor/.venv/bin/python /opt/pc-monitor/linux_client/power_agent.py --port ${BC250_SERIAL}
-Restart=on-failure
+# Explicit stop/shutdown is not restarted by systemd, even with "always".
+Restart=always
 RestartSec=3
 TimeoutStopSec=5
 RuntimeDirectory=bc250-monitor

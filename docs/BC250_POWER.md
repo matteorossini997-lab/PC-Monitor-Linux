@@ -219,10 +219,51 @@ Installazione proposta, da adattare sulla **BC250 reale**:
    richiede Python o l'agente al termine dello shutdown. Si esegue solo per
    `poweroff`/`halt`, mai per `reboot`/`kexec`; invia la conferma finale tre volte.
    In mancanza della conferma il controller conserva ATX ON.
-5. Solo dopo aver verificato configurazione e cablaggio, usare `systemctl
-   daemon-reload` e abilitare `bc250-monitor.service`. La configurazione del
-   servizio esegue azioni di alimentazione come root: limitare scrupolosamente
-   i permessi di tutti i file `/opt/pc-monitor` e della sua virtualenv.
+5. Solo dopo aver verificato configurazione e cablaggio, eseguire **sulla BC250**:
+
+   ```sh
+   sudo systemctl daemon-reload
+   sudo systemctl enable --now bc250-monitor.service
+   systemctl is-enabled bc250-monitor.service
+   systemctl is-active bc250-monitor.service
+   ```
+
+   I controlli devono riportare rispettivamente `enabled` e `active`. Il servizio
+   esegue azioni di alimentazione come root: limitare scrupolosamente i permessi
+   di tutti i file `/opt/pc-monitor` e della sua virtualenv. Questi comandi non
+   sono stati eseguiti nell'ambiente di sviluppo.
+
+### Avvio automatico e ripartenza
+
+- **Linux:** una volta installato e abilitato, `bc250-monitor.service` parte a
+  ogni boot tramite `multi-user.target`, senza login, desktop, terminale o Wi-Fi.
+  Un solo agente invia sia telemetria sia notifiche di alimentazione: non avviare
+  anche il vecchio client sulla stessa USB.
+- **Ripartenza:** `Restart=always` e `RestartSec=3` riavviano il processo dopo un
+  crash o un'uscita pulita inattesa. `StartLimitIntervalSec=0` evita il blocco dei
+  tentativi dopo più errori. File mancanti, permessi errati o dipendenze assenti
+  devono comunque essere corretti: i tentativi non riparano l'installazione.
+- **USB tardiva o scollegata:** non c'è un vincolo `.device` che impedisca
+  l'avvio; l'agente ritenta la connessione e l'handshake. Usare un percorso
+  persistente `/dev/serial/by-id/…`, non un nome variabile come `/dev/ttyUSB0`.
+- **Stop intenzionale:** `systemctl stop`, `disable --now` e l'arresto del sistema
+  fermano regolarmente il servizio; `Restart=always` non contrasta lo shutdown.
+  Il notifier finale resta separato e invia la conferma come descritto sopra.
+- **Waveshare:** il firmware flashato parte dalla flash a ogni alimentazione o
+  reset, tramite il bootloader ESP-IDF e `app_main()`. Non serve premere RUN,
+  collegare un PC di sviluppo o tenere aperto `idf.py monitor`. Il controller
+  parte prima di grafica/rete; spegnere l'LCD dopo 10 s non ferma il firmware.
+  L'ESP32 deve ricevere **+5VSB** anche quando le rail principali ATX sono OFF.
+  L'avvio automatico del firmware **non significa accensione automatica della
+  BC250**: dopo reset restano valide le cautele sul latch `unknown`, senza impulsi
+  POWER/ATX generati soltanto per l'avvio del programma.
+
+Per diagnosticare un servizio che continua a ripartire:
+
+```sh
+systemctl status bc250-monitor.service
+journalctl -u bc250-monitor.service -b --no-pager -n 80
+```
 
 Avvio manuale alternativo:
 

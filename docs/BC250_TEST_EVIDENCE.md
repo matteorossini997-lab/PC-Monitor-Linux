@@ -77,6 +77,46 @@ The five-second correction was reverified separately in
 boundary probe, security tests and 26 Python tests pass; `git diff --check` is
 clean. No generated `sdkconfig` exists locally to retain an older override.
 
+## Autostart follow-up
+
+User requirement: Linux telemetry/power agent and Waveshare firmware start
+automatically, without login or manually launching a program. Firmware already
+enters `app_main()` from the ESP-IDF bootloader; this follow-up does not change
+firmware boot, latch synchronization or GPIO effects.
+
+RED checkpoint `41b5336`: `python3 -m unittest discover -s tests -p
+'test_autostart.py' -v` ran five unit-contract tests: three passed, two failed
+against `Restart=on-failure` and absent `StartLimitIntervalSec`. After changing
+the unit to `Restart=always`, `RestartSec=3`, `StartLimitIntervalSec=0`, all five
+pass. Tests also preserve headless `multi-user.target` boot, no USB device
+dependency, and one serial-owning agent with telemetry enabled. These are file
+contract tests, **not** a real systemd boot test.
+
+GREEN executor run: complete Python suite **31 tests OK**, Ruff on the new test
+and relevant agent modules clean, native FSM17/security/display5 tests pass,
+and `git diff --check` (working/staged) passes. Logs and exact commands/exits:
+`/home/user/kicad-workspace/verification/software-autostart-red/` and adjacent
+`software-autostart-green/`. No production Python behavior changed; prior code
+coverage percentages are not remeasured whole-firmware coverage here.
+
+Offline `systemd-analyze verify` on the original unit exits 1 because
+`/opt/pc-monitor/.venv/bin/python` is absent here. A clearly labeled temporary
+copy with only that executable path substituted passes verification (exit 0),
+establishing unit syntax, **not deployment**. No `systemctl`, service install,
+enable/start/restart, real serial device or power action was executed. The guide
+now gives explicit `enable --now`, `is-enabled` and `is-active` commands to run
+on the BC250 after installation and hardware checks.
+
+Assessment **3.8/5**: accuracy 4 (unit contracts/syntax verified, not actual boot),
+completeness 3 (autostart policy implemented but not enabled on the real BC250),
+clarity 4 (guide distinguishes firmware boot from PC power-on), actionability 4
+(exact install verification commands, distribution paths still need checking),
+conciseness 4 (one shared service, no separate telemetry daemon or installer).
+Next improvement: install/enable on the BC250 and verify reboot, late USB and
+process recovery while observing that intentional shutdown is not restarted.
+The expected user assessment is "automatic once installed/enabled, not already
+activated on my actual machine".
+
 ## Not established by these tests
 
 Display-specific RED/GREEN commands, coverage and rendering checks are recorded
