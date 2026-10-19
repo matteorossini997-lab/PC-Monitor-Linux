@@ -152,8 +152,10 @@ static void test_long_press_forces_off_once_and_release_does_not_restart(void)
     init_running();
     bc_power_step(&p, 500, true, true);
     bc_power_step(&p, 550, true, true);
-    assert(bc_power_step(&p, 8549, true, true) == 0);
-    assert(bc_power_step(&p, 8550, true, true) == BC_EFFECT_LATCH);
+    /* Debounced press begins at 550 ms: no cut at 4,999 ms; cut at 5,000 ms. */
+    assert(p.long_press_ms == 5000);
+    assert(bc_power_step(&p, 5549, true, true) == 0);
+    assert(bc_power_step(&p, 5550, true, true) == BC_EFFECT_LATCH);
     assert(p.state == BC_OFF);
     assert(bc_power_step(&p, 12000, false, true) == 0);
     bc_power_step(&p, 13000, false, false);
