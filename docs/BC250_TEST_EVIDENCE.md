@@ -16,6 +16,7 @@ Baseline repository commit: `d3a18f9f97ad66745648bf4a44c3993963299a54`.
 | Strict authentication/ACK parser | `313d778`: missing `power_security.h/.c` | Bearer token validation, constant-work secret comparison and bounded ACK parsing pass native tests |
 | Contradictory STATE safety | `3cbc86c`: assertion `!bc_power_command(...BC_CMD_START...)` failed with raw STATE HIGH | Start is rejected rather than toggling a latch believed OFF when STATE contradicts it |
 | Pending-sleep safety | `8ffe98e`: premature WAKE was accepted after SLEEP, before the suspend hook | No POWER impulse until OS suspend announcement and stable LOW STATE; rising STATE also prevents another wake pulse |
+| Five-second forced-off requirement | `d246f00`: assertion `p.long_press_ms == 5000` failed against the old 8000 ms default | Regression passes: no cut at 4999 ms and a single cut at 5000 ms after the debounced press; firmware/menuconfig defaults are 5000 ms |
 
 The initial sleep-cancellation test was refined: an ordinary heartbeat must not
 cancel pending suspend, whereas an explicit RESUMED notification does. This is an
@@ -71,6 +72,11 @@ and lint results after the pending-sleep fix are in `software-final-sleep-guard/
 Checkpoint history preserves the
 RED stages above; do not interpret those intermediate commits as release builds.
 
+The five-second correction was reverified separately in
+`software-five-seconds-green/`: all 17 FSM scenarios, the explicit 4999/5000 ms
+boundary probe, security tests and 26 Python tests pass; `git diff --check` is
+clean. No generated `sdkconfig` exists locally to retain an older override.
+
 ## Not established by these tests
 
 - **ESP-IDF firmware compilation was not run:** no ESP-IDF/toolchain installed.
@@ -83,6 +89,9 @@ RED stages above; do not interpret those intermediate commits as release builds.
 - No service was installed/enabled; no real power, suspend or flash command ran.
 - TPMS1.9 behavior, ATX latch feedback, ACPI sleep support, USB standby power,
   pulse timing and real hardware reset behavior still require physical tests.
+  The follow-up [online research](BC250_TPMS1_RESEARCH.md) supports community
+  ON/OFF readings but also reports broken native suspend/resume; it does not
+  validate the current `systemctl suspend` backend on this board.
 
 See [BC250_POWER.md](BC250_POWER.md) for setup and the safe handling of unknown
 latch state. Host tests passing is **not** approval to operate untested hardware.

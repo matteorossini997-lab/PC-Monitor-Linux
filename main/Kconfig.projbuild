@@ -64,7 +64,7 @@ config BC250_BOARD_BUTTON_GPIO
 
 config BC250_LONG_PRESS_MS
     int "Forced power-off hold time (ms; data loss possible)"
-    default 8000
+    default 5000
     range 5000 30000
 
 config BC250_BOOT_BUTTON_DELAY_MS

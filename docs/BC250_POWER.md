@@ -2,6 +2,13 @@
 
 ## Ambito e comportamento
 
+> **Aggiornamento ricerca TPMS1:** le fonti community riportano TPMS1.9 alto
+> da acceso e basso dopo shutdown, ma segnalano anche suspend nativo senza
+> risveglio sulla BC250. Il backend `systemctl suspend` qui implementato **non è
+> una funzione collaudata su questa scheda e non va attivato senza verifica**.
+> Lo pseudo-sleep di altri progetti è una pausa software distinta, non ancora
+> implementata qui. Vedi [fonti e letture TPMS1](BC250_TPMS1_RESEARCH.md).
+
 Questa integrazione aggiunge il controller alla schermata Scarab e al client
 Linux esistenti. Target: **Waveshare ESP32-S3-LCD-1.28 con ESP32-S3R2**, display
 integrato, 16 MB flash e **2 MB Quad PSRAM**, più la PCB BC250 del progetto KiCad.
@@ -13,7 +20,7 @@ usare quel cablaggio per questa variante**.
 | Tasto breve, ATX noto OFF | Abilita ATX, attende 2 s; impulso POWER BC250 solo se STATE non è già alto |
 | Tasto breve, PC acceso | Richiede `systemctl poweroff` tramite l'agente Linux |
 | Tasto breve, sleep noto | Impulso breve al POWER BC250 per risvegliare, senza modificare ATX |
-| Tasto tenuto almeno 8 s | Forza OFF solo se il latch è noto ON; possibile perdita dati |
+| Tasto tenuto almeno 5 s | Forza OFF solo se il latch è noto ON; possibile perdita dati |
 | Menu Linux: spegnimento | Conferma finale dal sistema operativo; attende STATE LOW stabile 3 s, poi rilascia ATX |
 | Menu Linux: sospensione/ripresa | Hook pre/post: conserva sempre ATX durante sleep, ripristina lo stato al resume |
 | Menu Linux: riavvio | Nessuna conferma di OFF, nessun rilascio automatico del latch |

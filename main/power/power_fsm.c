@@ -36,7 +36,7 @@ void bc_power_init(bc_power_t *p, uint64_t now, bool state_high, bool button_pre
     p->button_armed = !button_pressed;
     p->raw_button_changed = now;
     p->state_changed = now;
-    p->long_press_ms = 8000;
+    p->long_press_ms = 5000;
     p->boot_button_delay_ms = 2000;
     p->action_timeout_ms = 120000;
 }
