@@ -81,3 +81,50 @@ verificata. Le conclusioni sopra hanno fonti direttamente leggibili.
 La soglia richiesta per il pulsante fisico è **5 secondi** di pressione
 stabilizzata, non 8. Firmware, menuconfig, documentazione e test del limite
 4999/5000 ms vengono aggiornati insieme.
+
+## Riferimenti aggiunti dall'utente: mosfet.party e Reddit
+
+La [pagina LITE/DIY](https://mosfet.party/products/adapter-2) e il
+[PDF di cablaggio del produttore](https://github.com/mosfetparty/bc250-psu-adapter/blob/main/Universal%20%E2%80%94%20Lite%20Edition/Wiring%20Diagram/Lite%20-%20BC250%20PSU%20Adapter.pdf)
+sono stati aperti e verificati anche nelle immagini, non solo nel testo.
+
+Il diagramma identifica un'uscita opzionale `BTN_OUT` verso un pad del gruppo
+POWER/RESET **sul lato inferiore della BC250**. Il pad è cerchiato in rosso nel
+riquadro in alto a sinistra: è un riferimento visivo utile per `J4.1`, senza
+inventare un pin POWER dentro TPMS1. Prima della saldatura controllare che il
+layout della propria scheda corrisponda e identificare il contatto POWER, non RESET.
+
+| Segnale adattatore mosfet.party | Funzione corrispondente nel nostro progetto |
+|---|---|
+| `BTN_OUT` | J4.1 `BC250_PWR_BTN`, verso il contatto segnale POWER |
+| `HOST_ON` da TPMS1.9 | J4.2 `ESP_STATE` |
+| `GND` | Massa comune; J4.3 verso GND BC250, per esempio TPMS1.17 |
+| `PS_ON` | J1_ATX1.3, verso PS_ON# ATX |
+| `5V_STB` | Ingresso standby ATX J1_ATX1.1, prima del nostro fusibile |
+| Coppia `BTN+` / `BTN-` | Funzione del nostro J2, contatto del pulsante esterno |
+
+Questa è una corrispondenza **funzionale**, non un'indicazione di collegare i due
+controller in parallelo o di sostituirne i componenti alla cieca. Il produttore
+non pubblica in quel PDF lo schema elettrico interno completo né una prova di
+suspend/resume: non ne deduco tempi, tensioni del pad POWER o supporto allo sleep.
+
+**Differenza importante:** il suo diagramma permette, in alternativa a TPMS1,
+di prelevare `HOST_ON` dal secondo pin di CPU_FAN1. Nel pinout BC250 quel punto è
+la rail **12 V** della ventola: non copiarlo sul nostro J4.2/ESP_STATE, che arriva
+all'ingresso ESP32 da 3,3 V. Il produttore vieta inoltre di collegare le due fonti
+HOST_ON contemporaneamente. Per noi resta TPMS1.9, non CPU_FAN1.
+
+Anche la sua uscita LED 5 V/15 mA è specifica del suo circuito: non cambia il
+cablaggio esterno a 12 V previsto per il pulsante acquistato dall'utente.
+
+**Pulsante posteriore con ATX OFF:** nella nostra PCB J4.1 è l'uscita del
+fototransistor U5, non un ingresso di lettura del pulsante posteriore. Il
+pulsante osservato dall'ESP32 è quello esterno su J2. Quindi non prometto che
+premere il pulsante posteriore riaccenda un ATX già disabilitato dal nostro
+latch: per quella funzione occorre un percorso aggiuntivo di rilevazione o un
+diverso circuito standby, non il solo cambio di firmware.
+
+I due link Reddit forniti dall'utente (`1so14qn` e `1ueu79e`) non sono risultati
+leggibili direttamente: pagine vuote/interstiziali e richieste JSON HTTP 403.
+Non attribuisco ai loro commenti risultati di lettura o di sleep non verificati;
+servono testo o screenshot per integrarli come evidenza diretta.
